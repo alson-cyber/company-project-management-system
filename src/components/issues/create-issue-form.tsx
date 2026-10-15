@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useActionState, useId, useState } from "react";
 import type { IssueType } from "@/generated/prisma/enums";
 import { createIssueAction, type IssueActionState } from "@/app/(app)/issues/actions";
@@ -13,20 +14,29 @@ export function CreateIssueForm({
   parentId,
   members,
   onCreated,
+  compact = false,
+  defaultOpen = false,
+  onDismiss,
 }: {
   projectId: string;
   type: IssueType;
   parentId?: string;
   members: Array<{ id: string; name: string }>;
   onCreated?: () => void;
+  compact?: boolean;
+  defaultOpen?: boolean;
+  onDismiss?: () => void;
 }) {
   const id = useId();
-  const [open, setOpen] = useState(false);
+  const router = useRouter();
+  const [open, setOpen] = useState(defaultOpen);
   const [state, formAction, pending] = useActionState<IssueActionState, FormData>(async (previous, formData) => {
     const result = await createIssueAction(previous, formData);
     if (result?.ok) {
       setOpen(false);
       onCreated?.();
+      onDismiss?.();
+      router.refresh();
     }
     return result;
   }, null);
@@ -34,6 +44,19 @@ export function CreateIssueForm({
   const label = ISSUE_TYPE_LABELS[type];
 
   if (!open) {
+    if (compact) {
+      return (
+        <Button
+          type="button"
+          variant="quiet"
+          className="size-7 px-0 text-base leading-none text-muted"
+          aria-label={parentId ? `Add ${label}` : `Create ${label}`}
+          onClick={() => setOpen(true)}
+        >
+          +
+        </Button>
+      );
+    }
     return (
       <Button type="button" variant="secondary" onClick={() => setOpen(true)}>
         {parentId ? `Add ${label}` : `Create ${label}`}
@@ -93,7 +116,15 @@ export function CreateIssueForm({
           {pending ? <Spinner /> : null}
           {pending ? "Creating…" : `Create ${label}`}
         </Button>
-        <Button type="button" variant="quiet" onClick={() => setOpen(false)} disabled={pending}>
+        <Button
+          type="button"
+          variant="quiet"
+          onClick={() => {
+            setOpen(false);
+            onDismiss?.();
+          }}
+          disabled={pending}
+        >
           Cancel
         </Button>
       </div>

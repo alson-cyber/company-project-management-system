@@ -8,6 +8,8 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Playwright opens the dev server on localhost. Next blocks that host unless it is listed.
+  allowedDevOrigins: ["localhost", "127.0.0.1"],
   // Every page is per-user and permission-checked, so pages render at request time.
   // Cache Components / partial prefetching are intentionally off (docs/ARCHITECTURE-PLAN.md §9).
   cacheComponents: false,

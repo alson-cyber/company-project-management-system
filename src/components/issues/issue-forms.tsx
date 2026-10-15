@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useActionState, useId } from "react";
 import type { IssuePriority, IssueStatus } from "@/generated/prisma/enums";
 import {
@@ -33,7 +34,12 @@ export function IssuePropertiesForm({
   members: Array<{ id: string; name: string }>;
 }) {
   const id = useId();
-  const [state, formAction, pending] = useActionState<IssueActionState, FormData>(updateIssueAction, null);
+  const router = useRouter();
+  const [state, formAction, pending] = useActionState<IssueActionState, FormData>(async (previous, formData) => {
+    const result = await updateIssueAction(previous, formData);
+    if (result?.ok) router.refresh();
+    return result;
+  }, null);
   const fieldErrors = state && !state.ok ? state.error.fieldErrors : undefined;
   const dueValue = issue.dueDate ? calendarDayUtc(issue.dueDate) : "";
 
@@ -102,7 +108,12 @@ export function IssuePropertiesForm({
 
 export function StoryFieldsForm({ issue }: { issue: NonNullable<IssueDetail["story"]> & Pick<IssueDetail, "id" | "number" | "project"> }) {
   const id = useId();
-  const [state, formAction, pending] = useActionState<IssueActionState, FormData>(setStoryFieldsAction, null);
+  const router = useRouter();
+  const [state, formAction, pending] = useActionState<IssueActionState, FormData>(async (previous, formData) => {
+    const result = await setStoryFieldsAction(previous, formData);
+    if (result?.ok) router.refresh();
+    return result;
+  }, null);
 
   return (
     <form action={formAction} className="grid gap-3">
@@ -140,7 +151,12 @@ export function CriteriaManager({
   issueNumber: number;
   criteria: AcceptanceCriterionView[];
 }) {
-  const [addState, addAction, addPending] = useActionState<IssueActionState, FormData>(addCriterionAction, null);
+  const router = useRouter();
+  const [addState, addAction, addPending] = useActionState<IssueActionState, FormData>(async (previous, formData) => {
+    const result = await addCriterionAction(previous, formData);
+    if (result?.ok) router.refresh();
+    return result;
+  }, null);
 
   return (
     <div className="grid gap-3">
@@ -152,7 +168,8 @@ export function CriteriaManager({
             <li key={criterion.id} className="flex flex-wrap items-start gap-2 rounded-lg border border-line px-3 py-2">
               <form
                 action={async (formData) => {
-                  await updateCriterionAction(null, formData);
+                  const result = await updateCriterionAction(null, formData);
+                  if (result?.ok) router.refresh();
                 }}
                 className="flex flex-1 items-start gap-2"
               >
@@ -167,7 +184,8 @@ export function CriteriaManager({
               <p className="min-w-0 flex-1 text-sm">{criterion.text}</p>
               <form
                 action={async (formData) => {
-                  await removeCriterionAction(null, formData);
+                  const result = await removeCriterionAction(null, formData);
+                  if (result?.ok) router.refresh();
                 }}
               >
                 <input type="hidden" name="criterionId" value={criterion.id} />
@@ -198,7 +216,12 @@ export function CriteriaManager({
 }
 
 export function LabelsForm({ issue }: { issue: IssueDetail }) {
-  const [state, formAction, pending] = useActionState<IssueActionState, FormData>(setLabelsAction, null);
+  const router = useRouter();
+  const [state, formAction, pending] = useActionState<IssueActionState, FormData>(async (previous, formData) => {
+    const result = await setLabelsAction(previous, formData);
+    if (result?.ok) router.refresh();
+    return result;
+  }, null);
   return (
     <form action={formAction} className="grid gap-2">
       <input type="hidden" name="issueId" value={issue.id} />
@@ -222,12 +245,21 @@ export function LabelsForm({ issue }: { issue: IssueDetail }) {
 }
 
 export function ArchiveRestoreForm({ issue }: { issue: IssueDetail }) {
+  const router = useRouter();
   const [archiveState, archiveAction, archivePending] = useActionState<IssueActionState, FormData>(
-    archiveIssueAction,
+    async (previous, formData) => {
+      const result = await archiveIssueAction(previous, formData);
+      if (result?.ok) router.refresh();
+      return result;
+    },
     null,
   );
   const [restoreState, restoreAction, restorePending] = useActionState<IssueActionState, FormData>(
-    restoreIssueAction,
+    async (previous, formData) => {
+      const result = await restoreIssueAction(previous, formData);
+      if (result?.ok) router.refresh();
+      return result;
+    },
     null,
   );
 
@@ -246,7 +278,15 @@ export function ArchiveRestoreForm({ issue }: { issue: IssueDetail }) {
   }
 
   return (
-    <form action={archiveAction} className="grid gap-2">
+    <form
+      action={archiveAction}
+      className="grid gap-2"
+      onSubmit={(event) => {
+        if (!window.confirm("Archive this issue? Its history is kept and its key is not reused.")) {
+          event.preventDefault();
+        }
+      }}
+    >
       <input type="hidden" name="issueId" value={issue.id} />
       <input type="hidden" name="projectKey" value={issue.project.key} />
       <ActionStatus state={archiveState} />
