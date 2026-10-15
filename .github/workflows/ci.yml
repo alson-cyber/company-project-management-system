@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: pms
+          POSTGRES_PASSWORD: pms_local_dev
+          POSTGRES_DB: pms_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pms -d pms_dev"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://pms:pms_local_dev@localhost:5432/pms_dev
+      TEST_DATABASE_URL: postgresql://pms:pms_local_dev@localhost:5432/pms_test
+      BETTER_AUTH_SECRET: ci-secret-which-is-32-chars-minxx
+      BETTER_AUTH_URL: http://localhost:3000
+      AUTH_PASSWORD_LOGIN_ENABLED: "true"
+      WORKSPACE_SLUG: company
+      STORAGE_DRIVER: local
+      STORAGE_LOCAL_DIR: .data/storage
+      ATTACHMENT_MAX_BYTES: "26214400"
+      SEED_DEV_PASSWORD: workhub-dev-only-pass
+      CI: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Apply migrations
+        run: pnpm db:deploy
+
+      - name: Seed development data
+        run: pnpm db:seed
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test:unit
+
+      - name: Integration tests
+        run: pnpm test:integration
+
+      - name: Production build
+        run: pnpm build
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        run: pnpm test:e2e

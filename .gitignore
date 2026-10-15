@@ -4,3 +4,13 @@ node_modules/
 .env.*
 !.env.example
 *.log
+
+.next/
+out/
+.turbo/
+.data/
+src/generated/
+playwright-report/
+test-results/
+coverage/
+*.tsbuildinfo

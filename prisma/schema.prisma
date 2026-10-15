@@ -1,0 +1,254 @@
+// Production schema. See docs/ARCHITECTURE-PLAN.md §4 and docs/PRODUCT-RULES.md.
+// Authentication tables (User, Session, Account, Verification) follow the Better Auth core schema.
+
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserStatus {
+  ACTIVE
+  DEACTIVATED
+}
+
+/// Workspace-wide grants. Plain workspace membership is the MEMBER baseline.
+enum WorkspaceRole {
+  ADMIN
+  EXECUTIVE
+}
+
+/// LEAD is the PROJECT_LEAD concept. At most one LEAD per project (partial unique index).
+enum ProjectRole {
+  LEAD
+  MEMBER
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+}
+
+enum ProjectHealth {
+  HEALTHY
+  ATTENTION
+  AT_RISK
+  BLOCKED
+}
+
+enum ActorType {
+  USER
+  SYSTEM
+}
+
+// ---------------------------------------------------------------------------
+// Identity (Better Auth core models + profile fields)
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String     @id @default(uuid())
+  name          String
+  email         String     @unique
+  emailVerified Boolean    @default(false) @map("email_verified")
+  image         String?
+  jobTitle      String?    @map("job_title")
+  status        UserStatus @default(ACTIVE)
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  sessions             Session[]
+  accounts             Account[]
+  workspaceMemberships WorkspaceMember[]
+  roleGrants           WorkspaceRoleGrant[] @relation("RoleGrantee")
+  roleGrantsGiven      WorkspaceRoleGrant[] @relation("RoleGrantor")
+  projectMemberships   ProjectMember[]      @relation("ProjectMemberUser")
+  membershipsAdded     ProjectMember[]      @relation("ProjectMemberAddedBy")
+  projectsCreated      Project[]            @relation("ProjectCreatedBy")
+  healthUpdates        Project[]            @relation("ProjectHealthUpdatedBy")
+  activityEvents       ActivityEvent[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id @default(uuid())
+  accountId             String    @map("account_id")
+  providerId            String    @map("provider_id")
+  userId                String    @map("user_id")
+  accessToken           String?   @map("access_token")
+  refreshToken          String?   @map("refresh_token")
+  idToken               String?   @map("id_token")
+  accessTokenExpiresAt  DateTime? @map("access_token_expires_at")
+  refreshTokenExpiresAt DateTime? @map("refresh_token_expires_at")
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id @default(uuid())
+  identifier String
+  value      String
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([identifier])
+  @@map("verifications")
+}
+
+// ---------------------------------------------------------------------------
+// Workspace boundary
+// ---------------------------------------------------------------------------
+
+model Workspace {
+  id        String   @id @default(uuid())
+  slug      String   @unique
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  members        WorkspaceMember[]
+  roleGrants     WorkspaceRoleGrant[]
+  projects       Project[]
+  activityEvents ActivityEvent[]
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  workspaceId String   @map("workspace_id")
+  userId      String   @map("user_id")
+  joinedAt    DateTime @default(now()) @map("joined_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@id([workspaceId, userId])
+  @@index([userId])
+  @@map("workspace_members")
+}
+
+model WorkspaceRoleGrant {
+  workspaceId String        @map("workspace_id")
+  userId      String        @map("user_id")
+  role        WorkspaceRole
+  grantedById String?       @map("granted_by_id")
+  grantedAt   DateTime      @default(now()) @map("granted_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  user      User      @relation("RoleGrantee", fields: [userId], references: [id], onDelete: Restrict)
+  grantedBy User?     @relation("RoleGrantor", fields: [grantedById], references: [id], onDelete: Restrict)
+
+  @@id([workspaceId, userId, role])
+  @@index([userId])
+  @@map("workspace_role_grants")
+}
+
+// ---------------------------------------------------------------------------
+// Projects
+// ---------------------------------------------------------------------------
+
+model Project {
+  id                String         @id @default(uuid())
+  workspaceId       String         @map("workspace_id")
+  key               String
+  name              String
+  description       String?
+  color             String         @default("#4f6cf7")
+  status            ProjectStatus  @default(PLANNING)
+  health            ProjectHealth?
+  healthNote        String?        @map("health_note")
+  healthUpdatedAt   DateTime?      @map("health_updated_at")
+  healthUpdatedById String?        @map("health_updated_by_id")
+  targetDate        DateTime?      @map("target_date") @db.Date
+  createdById       String         @map("created_by_id")
+  archivedAt        DateTime?      @map("archived_at")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+
+  workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  createdBy       User            @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  healthUpdatedBy User?           @relation("ProjectHealthUpdatedBy", fields: [healthUpdatedById], references: [id], onDelete: Restrict)
+  members         ProjectMember[]
+  activityEvents  ActivityEvent[]
+
+  @@unique([workspaceId, key])
+  @@index([workspaceId, archivedAt])
+  @@map("projects")
+}
+
+model ProjectMember {
+  projectId String      @map("project_id")
+  userId    String      @map("user_id")
+  role      ProjectRole @default(MEMBER)
+  addedById String?     @map("added_by_id")
+  joinedAt  DateTime    @default(now()) @map("joined_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  user    User    @relation("ProjectMemberUser", fields: [userId], references: [id], onDelete: Restrict)
+  addedBy User?   @relation("ProjectMemberAddedBy", fields: [addedById], references: [id], onDelete: Restrict)
+
+  @@id([projectId, userId])
+  @@unique([projectId], map: "project_members_one_lead_per_project", where: raw("role = 'LEAD'"))
+  @@index([userId])
+  @@map("project_members")
+}
+
+// ---------------------------------------------------------------------------
+// Activity / audit (append-only; see migration trigger and docs/ARCHITECTURE-PLAN.md §7)
+// ---------------------------------------------------------------------------
+
+model ActivityEvent {
+  id          String    @id @default(uuid())
+  workspaceId String    @map("workspace_id")
+  occurredAt  DateTime  @default(now()) @map("occurred_at")
+  actorType   ActorType @map("actor_type")
+  actorUserId String?   @map("actor_user_id")
+  projectId   String?   @map("project_id")
+  entityType  String    @map("entity_type")
+  entityId    String    @map("entity_id")
+  action      String
+  before      Json?
+  after       Json?
+  metadata    Json?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  actor     User?     @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  project   Project?  @relation(fields: [projectId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId, occurredAt(sort: Desc)])
+  @@index([projectId, occurredAt(sort: Desc)])
+  @@index([actorUserId, occurredAt(sort: Desc)])
+  @@index([entityType, entityId])
+  @@map("activity_events")
+}

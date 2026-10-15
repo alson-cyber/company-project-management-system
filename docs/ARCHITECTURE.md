@@ -168,7 +168,9 @@ Recommended separation:
 
 ## AI-agent future
 
-The future agent system should integrate as a first-class actor rather than pretending agents are human users.
+> **Future / Optional — Not Current Scope.** Do not implement this. Current actor types are `USER` and `SYSTEM` only.
+
+A later agent system, if ever approved, should integrate as a first-class actor rather than pretending agents are human users.
 
 Consider:
 

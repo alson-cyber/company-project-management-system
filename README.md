@@ -1,84 +1,117 @@
-# Workhub — Project Management System, Checkpoint 0.5
+# Workhub — Internal Project Management System
 
-A modern, dependency-free starter for the internal company project-management system.
+Company project management with Jira-level structure and a calmer Linear/Notion-like workspace.
 
-This checkpoint is intentionally designed to be **immediately runnable and reviewable** before Cursor takes over the production implementation. It is more than a static mockup: hierarchy creation, issue selection, notes, attachment metadata, comments, board status movement, activity logging, My Work, team contributions, and the Executive/Master view all have working browser interactions.
+The mandatory hierarchy is **Project → Epic → User Story → Task → Sub-task**. Direct AI-agent execution is out of current scope. Product rules live in [`docs/PRODUCT-RULES.md`](docs/PRODUCT-RULES.md).
 
-## Run locally
+## Current stage
 
-From this folder:
+**Production foundation.** The app is a real Next.js application with PostgreSQL, Prisma migrations, database-backed sessions, users, roles, project membership and a polished shell. The issue hierarchy is **not** implemented yet.
+
+Authoritative documents:
+
+- [`docs/PRODUCT-RULES.md`](docs/PRODUCT-RULES.md) — binding product rules
+- [`docs/ARCHITECTURE-PLAN.md`](docs/ARCHITECTURE-PLAN.md) — production architecture
+- [`docs/MIGRATION-PLAN.md`](docs/MIGRATION-PLAN.md) — staged migration
+- [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md) — audit of the original prototype
+
+The Checkpoint 0.5 clickable prototype is preserved in [`prototype/`](prototype/) for visual comparison. It is not the running product.
+
+## Architecture
+
+Modular monolith:
+
+- Next.js App Router (Node runtime) and TypeScript strict
+- PostgreSQL 17 via Docker Compose
+- Prisma ORM and SQL migrations
+- Zod at every server boundary
+- Better Auth with database sessions (email/password in development; generic OIDC when configured)
+- Server-side authorization in `src/server/access`
+- Local filesystem or S3-compatible object storage behind one interface (attachments come later)
+- Append-only `activity_events` (application only inserts; a database trigger rejects updates and deletes)
+
+## Prerequisites
+
+- Node.js 22+
+- pnpm 10+
+- Docker (for PostgreSQL)
+
+## Setup
 
 ```bash
-python3 -m http.server 4173
+cp .env.example .env
+# Set BETTER_AUTH_SECRET to the output of: openssl rand -base64 32
+pnpm install
+pnpm db:up
+pnpm db:deploy
+pnpm db:seed
+pnpm dev
 ```
 
-Then open:
+Open [http://localhost:3000](http://localhost:3000).
 
-```text
-http://localhost:4173
+### Environment
+
+Every variable is documented in `.env.example` and validated by `src/server/env.ts`. Do not commit `.env`.
+
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection (matches Docker Compose) |
+| `TEST_DATABASE_URL` | Separate database for integration tests |
+| `BETTER_AUTH_SECRET` | Session signing secret (≥ 32 characters) |
+| `BETTER_AUTH_URL` | Public origin, e.g. `http://localhost:3000` |
+| `SEED_DEV_PASSWORD` | Shared password for seeded development users |
+| `ATTACHMENT_MAX_BYTES` | Attachment size limit (default 26214400 = 25 MB) |
+| `STORAGE_DRIVER` | `local` or `s3` |
+| `AUTH_OIDC_*` | Optional company SSO. Leave blank until the identity provider is chosen. |
+
+Docker Compose publishes Postgres on `127.0.0.1:55432` so it does not collide with a local Postgres on 5432. Override with `PMS_POSTGRES_PORT`.
+
+## Development sign-in
+
+Sign-up is disabled. Use a seeded account and `SEED_DEV_PASSWORD` from `.env` (default in `.env.example`: `workhub-dev-only-pass`). These are local development credentials, not company accounts.
+
+| Email | Access |
+|---|---|
+| `alson.chen@workhub.test` | Executive (also lead of PMS) |
+| `sarah.kim@workhub.test` | Project lead of AquaDesk |
+| `alex.noor@workhub.test` | Member (engineer) |
+| `mika.ross@workhub.test` | Member (designer) |
+| `emma.davis@workhub.test` | Member (QA) |
+| `omar.haleem@workhub.test` | Admin, not a project member |
+| `lina.farah@workhub.test` | Deactivated — cannot sign in |
+
+The login screen lists these accounts in development only.
+
+Future company SSO is plugged in by setting all `AUTH_OIDC_*` variables (any OpenID Connect provider). The login screen then shows a single real “Continue with …” button. Do not add vendor-specific buttons until that provider is configured.
+
+## Tests
+
+```bash
+pnpm test:unit
+pnpm test:integration   # requires `pnpm db:up`
+pnpm test:e2e           # requires a seeded database and the app
+pnpm lint
+pnpm typecheck
+pnpm build
 ```
 
-The login is a visual prototype. Any valid-looking email/password will enter the product. Using an email containing `executive` selects the Executive demo role.
+## Prototype (visual reference)
 
-## Core product hierarchy
-
-```text
-Company
-└── Project
-    └── Epic
-        └── User Story
-            └── Task
-                └── Sub-task
+```bash
+pnpm prototype
 ```
 
-The browser prototype enforces these parent/child rules when creating children from the hierarchy.
+Then open [http://localhost:4173](http://localhost:4173). See [`prototype/README.md`](prototype/README.md).
 
-## Functional in this checkpoint
+## Scripts
 
-- Modern login experience
-- Responsive application shell
-- Dashboard
-- Project portfolio
-- Project workspace and tabs
-- Expandable issue hierarchy
-- Project → Epic → User Story → Task → Sub-task structure
-- User Story `As a / I want / So that` representation
-- Issue detail panel
-- Notes attached to work items
-- Attachment UI and browser-side metadata capture
-- Comments
-- Issue and project activity history
-- Kanban board with drag/drop status changes
-- My Work
-- Team contribution view
-- Executive / Master dashboard
-- Company-wide activity log
-- Master activity CSV export
-- Browser persistence via `localStorage`
-- Realistic seeded data for product evaluation
-
-## Important limitation
-
-Checkpoint 0.5 uses a browser-side persistence layer on purpose. It is a product/interaction foundation, **not the production backend**. Cursor should preserve the interaction model and visual language while migrating persistence, authentication, authorization, attachments, and audit guarantees to the production stack.
-
-Read:
-
-- `docs/PRODUCT.md`
-- `docs/ARCHITECTURE.md`
-- `docs/CURSOR-HANDOFF.md`
-- `data/schema.sql`
-
-## Reset demo data
-
-Open browser devtools and run:
-
-```js
-localStorage.removeItem('workhub-checkpoint-05')
-location.reload()
-```
-
-## Visual direction
-
-The UI aims for a modern business-tool feel: dense enough for serious work, clean enough for non-Jira users, with influence from Notion/Linear-style information hierarchy rather than a card-heavy admin template.
-
-`Workhub` is a placeholder product name and can be replaced without affecting the architecture.
+| Command | What it does |
+|---|---|
+| `pnpm db:up` | Start PostgreSQL (health-checked) |
+| `pnpm db:down` | Stop PostgreSQL (volume is kept) |
+| `pnpm db:deploy` | Apply migrations |
+| `pnpm db:seed` | Seed development users and projects |
+| `pnpm db:reset` | Drop, migrate, seed (destroys local data) |
+| `pnpm db:studio` | Prisma Studio |
+| `pnpm prototype` | Serve the preserved Checkpoint 0.5 UI |

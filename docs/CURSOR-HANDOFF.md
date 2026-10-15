@@ -1,10 +1,14 @@
 # Cursor Handoff — From Checkpoint 0.5 to Production Checkpoint 1
 
+> **Source of truth:** [`PRODUCT-RULES.md`](PRODUCT-RULES.md), [`ARCHITECTURE-PLAN.md`](ARCHITECTURE-PLAN.md), [`MIGRATION-PLAN.md`](MIGRATION-PLAN.md).
+> Direct AI-agent execution is **Future / Optional — Not Current Scope**.
+> The production foundation (Next.js, PostgreSQL, auth, roles, projects) is already in progress on `feat/production-foundation`. Do not rebuild it from the prototype.
+
 ## Mission
 
 Take the included working browser prototype and turn it into a production-quality internal project-management application without losing the UX flow or hierarchy clarity already established.
 
-Do not merely reproduce screenshots. Preserve the product behaviors and concepts in `PRODUCT.md`.
+Do not merely reproduce screenshots. Preserve the product behaviors and concepts in `PRODUCT-RULES.md`.
 
 ## First action
 

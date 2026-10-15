@@ -1,0 +1,10 @@
+node_modules
+.next
+out
+.data
+src/generated
+pnpm-lock.yaml
+prototype
+playwright-report
+test-results
+coverage
