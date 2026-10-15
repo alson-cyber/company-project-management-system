@@ -2,6 +2,7 @@ import type { IssuePriority, IssueStatus, IssueType } from "@/generated/prisma/e
 import { issueKey } from "@/modules/issues/issue.keys";
 import type { SeedUserEmail } from "@/modules/dev/dev-fixtures";
 import type { Database } from "@/server/db";
+import { getObjectStorage } from "@/server/storage";
 
 export interface SeedIssueNode {
   title: string;
@@ -13,6 +14,7 @@ export interface SeedIssueNode {
   creator?: SeedUserEmail;
   completedBy?: SeedUserEmail;
   dueDate?: string;
+  plannedStartDate?: string;
   description?: string;
   labels?: string[];
   story?: { asA: string; iWant: string; soThat: string };
@@ -28,6 +30,7 @@ export const SEED_ISSUE_TREES: Record<string, SeedIssueNode[]> = {
       status: "IN_PROGRESS",
       priority: "HIGH",
       assignee: "sarah.kim@workhub.test",
+      plannedStartDate: "2026-09-01",
       description: "End-to-end booking for resort guests, from discovery to confirmation.",
       labels: ["booking"],
       children: [
@@ -38,6 +41,7 @@ export const SEED_ISSUE_TREES: Record<string, SeedIssueNode[]> = {
           priority: "HIGH",
           assignee: "alex.noor@workhub.test",
           dueDate: "2026-11-20",
+          plannedStartDate: "2026-09-15",
           story: {
             asA: "resort guest",
             iWant: "to book activities through a simple flow",
@@ -58,6 +62,7 @@ export const SEED_ISSUE_TREES: Record<string, SeedIssueNode[]> = {
               assignee: "mika.ross@workhub.test",
               completedBy: "mika.ross@workhub.test",
               dueDate: "2026-09-30",
+              plannedStartDate: "2026-09-01",
               labels: ["design"],
               children: [
                 {
@@ -74,6 +79,8 @@ export const SEED_ISSUE_TREES: Record<string, SeedIssueNode[]> = {
                   status: "IN_REVIEW",
                   assignee: "mika.ross@workhub.test",
                   priority: "MEDIUM",
+                  plannedStartDate: "2026-10-06",
+                  dueDate: "2026-10-18",
                 },
               ],
             },
@@ -84,6 +91,7 @@ export const SEED_ISSUE_TREES: Record<string, SeedIssueNode[]> = {
               priority: "HIGHEST",
               assignee: "alex.noor@workhub.test",
               dueDate: "2026-10-10",
+              plannedStartDate: "2026-10-01",
               labels: ["api"],
               children: [
                 {
@@ -109,6 +117,7 @@ export const SEED_ISSUE_TREES: Record<string, SeedIssueNode[]> = {
               priority: "MEDIUM",
               assignee: "emma.davis@workhub.test",
               dueDate: "2026-11-05",
+              plannedStartDate: "2026-10-20",
               labels: ["qa"],
             },
           ],
@@ -157,6 +166,7 @@ export const SEED_ISSUE_TREES: Record<string, SeedIssueNode[]> = {
           priority: "HIGH",
           assignee: "emma.davis@workhub.test",
           dueDate: "2026-10-01",
+          plannedStartDate: "2026-09-10",
           story: {
             asA: "operations coordinator",
             iWant: "to see every excursion happening today with headcount and guide",
@@ -361,6 +371,7 @@ export async function seedProjectIssueTrees(
     });
   }
 
+  await ensureWorkspaceDemo(db, input);
   return { issuesCreated, projectsSeeded };
 }
 
@@ -408,6 +419,7 @@ async function insertNode(
       reporterId,
       createdById,
       dueDate: node.dueDate ? new Date(`${node.dueDate}T00:00:00.000Z`) : null,
+      plannedStartDate: node.plannedStartDate ? new Date(`${node.plannedStartDate}T00:00:00.000Z`) : null,
       rank: siblingCount.toString(36).padStart(6, "0"),
       completedAt: node.status === "DONE" ? now : null,
       completedById,
@@ -499,4 +511,209 @@ function requireUser(userIds: Map<string, string>, email: string): string {
   const id = userIds.get(email);
   if (!id) throw new Error(`Unknown seed user ${email}`);
   return id;
+}
+
+const DEMO_PLANS: Record<string, Record<string, { start?: string; due?: string }>> = {
+  AQUA: {
+    "Guest booking experience": { start: "2026-09-01" },
+    "Streamline guest booking flow": { start: "2026-09-15" },
+    "Design booking wizard": { start: "2026-09-01" },
+    "Design review and error states": { start: "2026-10-06", due: "2026-10-18" },
+    "Implement availability API": { start: "2026-10-01" },
+    "QA booking happy path": { start: "2026-10-20" },
+    "See today's excursion roster": { start: "2026-09-10" },
+    "Build roster query": { start: "2026-09-20", due: "2026-10-22" },
+  },
+  SV: {
+    "Complete signing on a phone": { start: "2026-10-01", due: "2026-11-15" },
+    "Mobile signature pad": { start: "2026-10-06" },
+  },
+  AIB: {
+    "Renew membership online": { start: "2026-10-01", due: "2026-11-20" },
+  },
+};
+
+const PNG = Uint8Array.from(
+  Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64"),
+);
+
+/**
+ * Fills planning dates and a few real attachments on databases that already had issues.
+ * Null dates are filled once; existing values are left alone.
+ */
+async function ensureWorkspaceDemo(
+  db: Database,
+  input: { workspaceId: string; userIds: Map<string, string> },
+): Promise<void> {
+  for (const [projectKey, plans] of Object.entries(DEMO_PLANS)) {
+    const project = await db.project.findUnique({
+      where: { workspaceId_key: { workspaceId: input.workspaceId, key: projectKey } },
+      select: { id: true },
+    });
+    if (!project) continue;
+    for (const [title, plan] of Object.entries(plans)) {
+      if (plan.start) {
+        await db.issue.updateMany({
+          where: { projectId: project.id, title, plannedStartDate: null },
+          data: { plannedStartDate: new Date(`${plan.start}T00:00:00.000Z`) },
+        });
+      }
+      if (plan.due) {
+        await db.issue.updateMany({
+          where: { projectId: project.id, title, dueDate: null },
+          data: { dueDate: new Date(`${plan.due}T00:00:00.000Z`) },
+        });
+      }
+    }
+  }
+
+  const aqua = await db.project.findUnique({
+    where: { workspaceId_key: { workspaceId: input.workspaceId, key: "AQUA" } },
+    select: { id: true, health: true },
+  });
+  if (!aqua) return;
+  const sarahId = requireUser(input.userIds, "sarah.kim@workhub.test");
+  if (!aqua.health) {
+    const note = "Availability work is overdue and still in progress.";
+    await db.project.update({
+      where: { id: aqua.id },
+      data: { health: "ATTENTION", healthNote: note, healthUpdatedAt: new Date(), healthUpdatedById: sarahId },
+    });
+    await db.activityEvent.create({
+      data: {
+        workspaceId: input.workspaceId,
+        actorType: "USER",
+        actorUserId: sarahId,
+        action: "project.health_changed",
+        entityType: "project",
+        entityId: aqua.id,
+        projectId: aqua.id,
+        before: { health: null },
+        after: { health: "ATTENTION", note },
+        metadata: { source: "development-seed" },
+      },
+    });
+  }
+
+  const availability = await db.issue.findFirst({
+    where: { projectId: aqua.id, title: "Implement availability API" },
+    select: { id: true, number: true },
+  });
+  const cancellation = await db.issue.findFirst({
+    where: { projectId: aqua.id, title: "Encode cancellation policy rules" },
+    select: { id: true, number: true },
+  });
+  const roster = await db.issue.findFirst({
+    where: { projectId: aqua.id, title: "Build roster query" },
+    select: { id: true, number: true },
+  });
+  const alexId = requireUser(input.userIds, "alex.noor@workhub.test");
+  const mikaId = requireUser(input.userIds, "mika.ross@workhub.test");
+  if (availability) {
+    await ensureSeedFile(db, {
+      workspaceId: input.workspaceId,
+      projectId: aqua.id,
+      issue: availability,
+      filename: "booking-flow.png",
+      contentType: "image/png",
+      bytes: PNG,
+      uploaderId: alexId,
+    });
+    await ensureSeedFile(db, {
+      workspaceId: input.workspaceId,
+      projectId: aqua.id,
+      issue: availability,
+      filename: "booking-reference.txt",
+      contentType: "text/plain",
+      bytes: new TextEncoder().encode("Guest booking reference notes.\n"),
+      uploaderId: mikaId,
+    });
+  }
+  if (cancellation) {
+    const comment = "Cancellation still needs the published policy window.";
+    const existingComment = await db.issueComment.findFirst({
+      where: { issueId: cancellation.id, body: comment, deletedAt: null },
+      select: { id: true },
+    });
+    if (!existingComment) {
+      const created = await db.issueComment.create({
+        data: { issueId: cancellation.id, authorId: alexId, body: comment },
+        select: { id: true },
+      });
+      await db.activityEvent.create({
+        data: {
+          workspaceId: input.workspaceId,
+          actorType: "USER",
+          actorUserId: alexId,
+          action: "issue.comment_added",
+          entityType: "issue_comment",
+          entityId: created.id,
+          projectId: aqua.id,
+          issueId: cancellation.id,
+          after: { excerpt: comment },
+          metadata: { source: "development-seed", issueKey: issueKey("AQUA", cancellation.number) },
+        },
+      });
+    }
+  }
+  if (roster) {
+    await ensureSeedFile(db, {
+      workspaceId: input.workspaceId,
+      projectId: aqua.id,
+      issue: roster,
+      filename: "roster-sketch.png",
+      contentType: "image/png",
+      bytes: PNG,
+      uploaderId: mikaId,
+    });
+  }
+}
+
+async function ensureSeedFile(
+  db: Database,
+  input: {
+    workspaceId: string;
+    projectId: string;
+    issue: { id: string; number: number };
+    filename: string;
+    contentType: string;
+    bytes: Uint8Array;
+    uploaderId: string;
+  },
+): Promise<void> {
+  const existing = await db.issueAttachment.findFirst({
+    where: { issueId: input.issue.id, originalFilename: input.filename, deletedAt: null },
+    select: { id: true, objectKey: true },
+  });
+  const objectKey = existing?.objectKey ?? `attachments/seed/${input.issue.id}/${input.filename.replace(/[^A-Za-z0-9._-]/g, "_")}`;
+  const storage = await getObjectStorage();
+  if (!(await storage.head(objectKey))) {
+    await storage.put(objectKey, input.bytes, { contentType: input.contentType, contentLength: input.bytes.byteLength });
+  }
+  if (existing) return;
+  const created = await db.issueAttachment.create({
+    data: {
+      issueId: input.issue.id,
+      uploadedById: input.uploaderId,
+      originalFilename: input.filename,
+      objectKey,
+      contentType: input.contentType,
+      sizeBytes: input.bytes.byteLength,
+    },
+    select: { id: true },
+  });
+  await db.activityEvent.create({
+    data: {
+      workspaceId: input.workspaceId,
+      actorType: "USER",
+      actorUserId: input.uploaderId,
+      action: "issue.attachment_added",
+      entityType: "issue_attachment",
+      entityId: created.id,
+      projectId: input.projectId,
+      issueId: input.issue.id,
+      after: { filename: input.filename, contentType: input.contentType, sizeBytes: input.bytes.byteLength },
+      metadata: { source: "development-seed", issueKey: issueKey("AQUA", input.issue.number) },
+    },
+  });
 }

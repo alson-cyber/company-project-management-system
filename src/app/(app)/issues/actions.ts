@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import {
   addAcceptanceCriterion,
   archiveIssue,
@@ -16,13 +15,12 @@ import {
 } from "@/modules/issues/issue.service";
 import { getActionAuthContext } from "@/server/access/session";
 import { actionSuccess, toActionError, type ActionResult } from "@/server/errors";
+import { revalidateProjectWorkspace } from "@/server/revalidate-project";
 
 export type IssueActionState = ActionResult<{ key?: string; id?: string; changed?: boolean }> | null;
 
 function pathsFor(projectKey: string, issueNumber?: string | number) {
-  revalidatePath(`/projects/${projectKey}`);
-  revalidatePath(`/projects/${projectKey}/issues`);
-  if (issueNumber !== undefined) revalidatePath(`/projects/${projectKey}/issues/${issueNumber}`);
+  revalidateProjectWorkspace(projectKey, issueNumber);
 }
 
 function optional(value: FormDataEntryValue | null): string | undefined {
@@ -53,6 +51,7 @@ export async function createIssueAction(_previous: IssueActionState, formData: F
       priority: optional(formData.get("priority")),
       assigneeId: optional(formData.get("assigneeId")),
       dueDate: optional(formData.get("dueDate")),
+      plannedStartDate: optional(formData.get("plannedStartDate")),
       story,
       acceptanceCriteria: criteriaRaw
         ? criteriaRaw
@@ -106,6 +105,7 @@ export async function patchIssueAction(_previous: IssueActionState, formData: Fo
     if (formData.has("priority")) input.priority = formData.get("priority");
     if (formData.has("assigneeId")) input.assigneeId = optional(formData.get("assigneeId")) ?? null;
     if (formData.has("dueDate")) input.dueDate = optional(formData.get("dueDate")) ?? null;
+    if (formData.has("plannedStartDate")) input.plannedStartDate = optional(formData.get("plannedStartDate")) ?? null;
     const result = await updateIssue(ctx, input);
     pathsFor(optional(formData.get("projectKey")) ?? "", optional(formData.get("issueNumber")));
     return actionSuccess({ changed: result.changed, key: result.key });
@@ -221,8 +221,7 @@ export async function archiveIssueAction(_previous: IssueActionState, formData: 
     const includeDescendants = optional(formData.get("includeDescendants")) === "on";
     await archiveIssue(ctx, { issueId: formData.get("issueId"), includeDescendants });
     const projectKey = optional(formData.get("projectKey")) ?? "";
-    revalidatePath(`/projects/${projectKey}`);
-    revalidatePath(`/projects/${projectKey}/issues`);
+    pathsFor(projectKey);
     return actionSuccess({});
   } catch (error) {
     return toActionError(error);

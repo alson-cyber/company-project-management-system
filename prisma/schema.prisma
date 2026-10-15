@@ -307,9 +307,11 @@ model Issue {
   assigneeId    String?       @map("assignee_id")
   reporterId    String        @map("reporter_id")
   createdById   String        @map("created_by_id")
-  dueDate       DateTime?     @map("due_date") @db.Date
-  rank          String        @default("a0")
-  completedAt   DateTime?     @map("completed_at")
+  dueDate          DateTime?     @map("due_date") @db.Date
+  /// Planning start. Never derived from createdAt. Null means unscheduled.
+  plannedStartDate DateTime?     @map("planned_start_date") @db.Date
+  rank             String        @default("a0")
+  completedAt      DateTime?     @map("completed_at")
   completedById String?       @map("completed_by_id")
   archivedAt    DateTime?     @map("archived_at")
   archivedById  String?       @map("archived_by_id")

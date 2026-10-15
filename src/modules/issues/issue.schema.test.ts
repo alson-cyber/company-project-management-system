@@ -21,6 +21,17 @@ describe("createIssueSchema", () => {
     ).toBe(true);
   });
 
+  test("rejects a planned start after the due date", () => {
+    const result = createIssueSchema.safeParse({
+      projectId,
+      type: "EPIC",
+      title: "Dated epic",
+      plannedStartDate: "2026-11-02",
+      dueDate: "2026-11-01",
+    });
+    expect(result.success).toBe(false);
+  });
+
   test("rejects an Epic with a parent", () => {
     expect(createIssueSchema.safeParse({ projectId, type: "EPIC", parentId, title: "Epic" }).success).toBe(false);
     expect(createIssueSchema.safeParse({ projectId, type: "EPIC", title: "Epic" }).success).toBe(true);

@@ -1,6 +1,7 @@
 import { ISSUE_PRIORITY_LABELS, ISSUE_STATUS_LABELS, ISSUE_TYPE_LABELS } from "@/modules/issues/issue.constants";
-import { PROJECT_HEALTH_LABELS, PROJECT_ROLE_LABELS } from "@/modules/projects/project.constants";
-import type { IssuePriority, IssueStatus, IssueType } from "@/generated/prisma/enums";
+import { PROJECT_HEALTH_LABELS, PROJECT_ROLE_LABELS, PROJECT_STATUS_LABELS } from "@/modules/projects/project.constants";
+import type { ActivityAction } from "@/modules/activity/activity.types";
+import type { IssuePriority, IssueStatus, IssueType, ProjectStatus } from "@/generated/prisma/enums";
 
 export interface ActivityEventView {
   id: string;
@@ -35,6 +36,16 @@ function textOf(value: unknown, key: string): string | null {
   return typeof found === "string" && found.trim() ? found : null;
 }
 
+function projectStatusLabel(value: unknown): string {
+  return typeof value === "string" && value in PROJECT_STATUS_LABELS
+    ? PROJECT_STATUS_LABELS[value as ProjectStatus]
+    : String(value ?? "Not set");
+}
+
+function dateLabel(value: unknown): string {
+  return typeof value === "string" && value ? value : "None";
+}
+
 function statusLabel(value: unknown): string {
   return typeof value === "string" && value in ISSUE_STATUS_LABELS
     ? ISSUE_STATUS_LABELS[value as IssueStatus]
@@ -56,6 +67,16 @@ export function describeActivity(event: ActivityEventView): string {
   switch (event.action) {
     case "project.created":
       return `created the project`;
+    case "project.updated": {
+      const fields = changedFields(event);
+      if (fields.length === 1 && fields[0] === "status") {
+        return `changed project status from ${projectStatusLabel(field(event.before, "status"))} to ${projectStatusLabel(field(event.after, "status"))}`;
+      }
+      if (fields.length === 1 && fields[0] === "name") return "renamed the project";
+      if (fields.length === 1 && fields[0] === "targetDate") return "changed the target date";
+      if (fields.length === 1 && fields[0] === "description") return "edited the project description";
+      return "updated the project";
+    }
     case "project.health_changed":
       return `changed health from ${healthLabel(field(event.before, "health"))} to ${healthLabel(field(event.after, "health"))}`;
     case "project.member_added": {
@@ -85,6 +106,7 @@ export function describeActivity(event: ActivityEventView): string {
         return "changed the assignee";
       }
       if (fields.length === 1 && fields[0] === "dueDate") return "changed the due date";
+      if (fields.length === 1 && fields[0] === "plannedStartDate") return "changed the planned start";
       if (fields.length === 1 && fields[0] === "parentId") return "moved the issue";
       if (fields.length === 1 && fields[0] === "title") return "edited the title";
       if (fields.length === 1 && fields[0] === "description") return "edited the description";
@@ -144,6 +166,19 @@ export function describeActivity(event: ActivityEventView): string {
 /** A short before/after line for the issue activity list. Null when the sentence already says enough. */
 export function activityDetail(event: ActivityEventView): string | null {
   switch (event.action) {
+    case "project.updated": {
+      const fields = changedFields(event);
+      if (fields.length === 1 && fields[0] === "status") {
+        return `${projectStatusLabel(field(event.before, "status"))} → ${projectStatusLabel(field(event.after, "status"))}`;
+      }
+      if (fields.length === 1 && fields[0] === "targetDate") {
+        return `${dateLabel(field(event.before, "targetDate"))} → ${dateLabel(field(event.after, "targetDate"))}`;
+      }
+      if (fields.length === 1 && fields[0] === "name") {
+        return `${dateLabel(field(event.before, "name"))} → ${dateLabel(field(event.after, "name"))}`;
+      }
+      return null;
+    }
     case "issue.updated": {
       const fields = changedFields(event);
       if (fields.length === 1 && fields[0] === "status") {
@@ -159,9 +194,10 @@ export function activityDetail(event: ActivityEventView): string | null {
         return `${personLabel(from)} → ${personLabel(to)}`;
       }
       if (fields.length === 1 && fields[0] === "dueDate") {
-        const from = field(event.before, "dueDate");
-        const to = field(event.after, "dueDate");
-        return `${typeof from === "string" ? from : "None"} → ${typeof to === "string" ? to : "None"}`;
+        return `${dateLabel(field(event.before, "dueDate"))} → ${dateLabel(field(event.after, "dueDate"))}`;
+      }
+      if (fields.length === 1 && fields[0] === "plannedStartDate") {
+        return `${dateLabel(field(event.before, "plannedStartDate"))} → ${dateLabel(field(event.after, "plannedStartDate"))}`;
       }
       return null;
     }
@@ -193,7 +229,7 @@ export function activityKind(event: ActivityEventView): string {
     if (fields.length === 1 && fields[0] === "status") return "Status";
     if (fields.length === 1 && fields[0] === "priority") return "Priority";
     if (fields.length === 1 && fields[0] === "assigneeId") return "Person";
-    if (fields.length === 1 && fields[0] === "dueDate") return "Date";
+    if (fields.length === 1 && (fields[0] === "dueDate" || fields[0] === "plannedStartDate")) return "Date";
     if (fields.length === 1 && fields[0] === "title") return "Title";
     if (fields.length === 1 && fields[0] === "description") return "Description";
     return "Issue";
@@ -206,4 +242,38 @@ export function activityKind(event: ActivityEventView): string {
   if (event.action === "issue.completed" || event.action === "issue.reopened") return "Status";
   if (event.action.startsWith("project.")) return "Project";
   return "Issue";
+}
+
+const ACTION_LABELS: Record<ActivityAction, string> = {
+  "project.created": "Project created",
+  "project.updated": "Project updated",
+  "project.health_changed": "Health changed",
+  "project.member_added": "Member added",
+  "issue.created": "Issue created",
+  "issue.updated": "Issue updated",
+  "issue.completed": "Issue completed",
+  "issue.reopened": "Issue reopened",
+  "issue.archived": "Issue archived",
+  "issue.restored": "Issue restored",
+  "issue.story_updated": "Story updated",
+  "issue.labels_changed": "Labels changed",
+  "issue.criterion_added": "Criterion added",
+  "issue.criterion_updated": "Criterion edited",
+  "issue.criterion_removed": "Criterion removed",
+  "issue.criterion_met": "Criterion met",
+  "issue.criterion_unmet": "Criterion unmet",
+  "issue.criterion_reordered": "Criterion reordered",
+  "issue.criterion_restored": "Criterion restored",
+  "issue.note_added": "Note added",
+  "issue.note_updated": "Note edited",
+  "issue.note_removed": "Note removed",
+  "issue.comment_added": "Comment added",
+  "issue.comment_updated": "Comment edited",
+  "issue.comment_removed": "Comment removed",
+  "issue.attachment_added": "File uploaded",
+  "issue.attachment_removed": "File removed",
+};
+
+export function activityActionLabel(action: string): string {
+  return action in ACTION_LABELS ? ACTION_LABELS[action as ActivityAction] : action;
 }

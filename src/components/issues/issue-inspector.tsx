@@ -504,7 +504,7 @@ function Details({
           ) : null}
         </p>
       ) : null}
-      <Properties issue={issue} editable={editable} pending={pendingField === "due" || pendingField === "labels"} patch={patch} />
+      <Properties issue={issue} editable={editable} pendingField={pendingField} patch={patch} />
     </div>
   );
 }
@@ -683,17 +683,20 @@ function DescriptionEditor({
 function Properties({
   issue,
   editable,
-  pending,
+  pendingField,
   patch,
 }: {
   issue: IssueDetail;
   editable: boolean;
-  pending: boolean;
+  pendingField: string | null;
   patch: (field: string, values: Record<string, string>) => Promise<boolean>;
 }) {
   const dueDate = toDate(issue.dueDate);
   const dueServer = dueDate ? calendarDayUtc(dueDate) : "";
   const due = useDraft(`${issue.id}:due`, dueServer);
+  const startDate = toDate(issue.plannedStartDate);
+  const startServer = startDate ? calendarDayUtc(startDate) : "";
+  const start = useDraft(`${issue.id}:start`, startServer);
   const labelServer = issue.labels.map((label) => label.name).join(", ");
   const labels = useDraft(`${issue.id}:labels`, labelServer);
   const [editingLabels, setEditingLabels] = useState(false);
@@ -714,13 +717,34 @@ function Properties({
         )}
       </Property>
       <Property label="Project">{issue.project.name}</Property>
+      <Property label="Planned start">
+        {editable ? (
+          <input
+            type="date"
+            aria-label="Planned start"
+            value={start.value}
+            disabled={pendingField === "start"}
+            className={cn(controlClasses, "h-11 max-w-52 sm:h-9")}
+            onChange={(event) => {
+              const value = event.target.value;
+              start.setValue(value);
+              void patch("start", { plannedStartDate: value }).then((ok) => {
+                if (ok) start.markClean(value);
+                else start.markClean(startServer);
+              });
+            }}
+          />
+        ) : (
+          <span>{startServer ? formatDate(issue.plannedStartDate) : "None"}</span>
+        )}
+      </Property>
       <Property label="Due date">
         {editable ? (
           <input
             type="date"
             aria-label="Due date"
             value={due.value}
-            disabled={pending}
+            disabled={pendingField === "due"}
             className={cn(controlClasses, "h-11 max-w-52 sm:h-9")}
             onChange={(event) => {
               const value = event.target.value;

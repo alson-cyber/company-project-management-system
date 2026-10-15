@@ -1,6 +1,6 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
-import type { ProjectHealth, ProjectRole, ProjectStatus } from "@/generated/prisma/enums";
+import type { ProjectHealth, ProjectRole, ProjectStatus, UserStatus } from "@/generated/prisma/enums";
 import { prisma } from "@/server/db";
 import { assertWorkspacePermission, hasWorkspacePermission } from "@/server/access/policy";
 import type { AuthContext } from "@/server/access/types";
@@ -27,6 +27,7 @@ export interface ProjectMemberView {
   name: string;
   email: string;
   jobTitle: string | null;
+  status: UserStatus;
   role: ProjectRole;
   joinedAt: Date;
 }
@@ -113,7 +114,7 @@ export async function getVisibleProjectByKey(ctx: AuthContext, key: string): Pro
     select: {
       role: true,
       joinedAt: true,
-      user: { select: { id: true, name: true, email: true, jobTitle: true } },
+      user: { select: { id: true, name: true, email: true, jobTitle: true, status: true } },
     },
     orderBy: [{ role: "asc" }, { user: { name: "asc" } }],
   });
@@ -128,6 +129,7 @@ export async function getVisibleProjectByKey(ctx: AuthContext, key: string): Pro
       name: member.user.name,
       email: member.user.email,
       jobTitle: member.user.jobTitle,
+      status: member.user.status,
       role: member.role,
       joinedAt: member.joinedAt,
     })),

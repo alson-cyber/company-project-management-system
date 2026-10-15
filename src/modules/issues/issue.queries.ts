@@ -68,6 +68,7 @@ export interface IssueDetail {
   reporter: IssuePerson;
   creator: IssuePerson;
   dueDate: Date | null;
+  plannedStartDate: Date | null;
   overdue: boolean;
   archivedAt: Date | null;
   completedAt: Date | null;
@@ -209,6 +210,7 @@ export async function getVisibleIssueByNumber(
       priority: true,
       parentId: true,
       dueDate: true,
+      plannedStartDate: true,
       archivedAt: true,
       completedAt: true,
       createdAt: true,
@@ -261,6 +263,7 @@ export async function getVisibleIssueByNumber(
     reporter: issue.reporter,
     creator: issue.createdBy,
     dueDate: issue.dueDate,
+    plannedStartDate: issue.plannedStartDate,
     overdue: isOverdue(issue.dueDate, issue.status, timeZone),
     archivedAt: issue.archivedAt,
     completedAt: issue.completedAt,

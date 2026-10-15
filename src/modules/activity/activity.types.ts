@@ -4,6 +4,7 @@
  */
 export const ACTIVITY_ACTIONS = [
   "project.created",
+  "project.updated",
   "project.health_changed",
   "project.member_added",
   "issue.created",

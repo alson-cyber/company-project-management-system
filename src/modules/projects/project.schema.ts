@@ -42,3 +42,26 @@ export const setProjectHealthSchema = z.object({
 });
 
 export type SetProjectHealthInput = z.input<typeof setProjectHealthSchema>;
+
+const nullableDate = z.union([z.iso.date("Use a valid date."), z.literal(""), z.null()]).transform((value) => {
+  if (!value) return null;
+  return new Date(`${value}T00:00:00.000Z`);
+});
+
+/**
+ * Basics a project lead can change. The project key is immutable: issue keys are
+ * `KEY-number`, so renaming the key would rewrite every existing reference.
+ */
+export const updateProjectSchema = z.object({
+  projectId: z.uuid("Unknown project."),
+  name: z.string().trim().min(2, "Name must be at least 2 characters.").max(80, "Name must be 80 characters or fewer."),
+  description: z
+    .string()
+    .trim()
+    .max(2000, "Description must be 2,000 characters or fewer.")
+    .transform((value) => (value.length === 0 ? null : value)),
+  status: z.enum(PROJECT_STATUSES, { error: "Choose a project status." }),
+  targetDate: nullableDate,
+});
+
+export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
