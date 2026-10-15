@@ -5,7 +5,9 @@ import {
   addAcceptanceCriterion,
   archiveIssue,
   createIssue,
+  moveAcceptanceCriterion,
   removeAcceptanceCriterion,
+  restoreAcceptanceCriterion,
   restoreIssue,
   setIssueLabels,
   setStoryFields,
@@ -93,6 +95,25 @@ export async function updateIssueAction(_previous: IssueActionState, formData: F
   }
 }
 
+/** Updates only the fields present on the form, so one control cannot wipe another draft. */
+export async function patchIssueAction(_previous: IssueActionState, formData: FormData): Promise<IssueActionState> {
+  try {
+    const ctx = await getActionAuthContext();
+    const input: Record<string, unknown> = { issueId: formData.get("issueId") };
+    if (formData.has("title")) input.title = formData.get("title");
+    if (formData.has("description")) input.description = optional(formData.get("description")) ?? "";
+    if (formData.has("status")) input.status = formData.get("status");
+    if (formData.has("priority")) input.priority = formData.get("priority");
+    if (formData.has("assigneeId")) input.assigneeId = optional(formData.get("assigneeId")) ?? null;
+    if (formData.has("dueDate")) input.dueDate = optional(formData.get("dueDate")) ?? null;
+    const result = await updateIssue(ctx, input);
+    pathsFor(optional(formData.get("projectKey")) ?? "", optional(formData.get("issueNumber")));
+    return actionSuccess({ changed: result.changed, key: result.key });
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
 export async function setStoryFieldsAction(_previous: IssueActionState, formData: FormData): Promise<IssueActionState> {
   try {
     const ctx = await getActionAuthContext();
@@ -134,6 +155,32 @@ export async function updateCriterionAction(_previous: IssueActionState, formDat
     });
     pathsFor(optional(formData.get("projectKey")) ?? "", optional(formData.get("issueNumber")));
     return actionSuccess({ changed: result.changed });
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+export async function moveCriterionAction(_previous: IssueActionState, formData: FormData): Promise<IssueActionState> {
+  try {
+    const ctx = await getActionAuthContext();
+    const direction = optional(formData.get("direction"));
+    const result = await moveAcceptanceCriterion(ctx, {
+      criterionId: formData.get("criterionId"),
+      direction: direction === "down" ? "down" : "up",
+    });
+    pathsFor(optional(formData.get("projectKey")) ?? "", optional(formData.get("issueNumber")));
+    return actionSuccess({ changed: result.changed });
+  } catch (error) {
+    return toActionError(error);
+  }
+}
+
+export async function restoreCriterionAction(_previous: IssueActionState, formData: FormData): Promise<IssueActionState> {
+  try {
+    const ctx = await getActionAuthContext();
+    await restoreAcceptanceCriterion(ctx, { criterionId: formData.get("criterionId") });
+    pathsFor(optional(formData.get("projectKey")) ?? "", optional(formData.get("issueNumber")));
+    return actionSuccess({});
   } catch (error) {
     return toActionError(error);
   }

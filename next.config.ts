@@ -10,6 +10,12 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   // Playwright opens the dev server on localhost. Next blocks that host unless it is listed.
   allowedDevOrigins: ["localhost", "127.0.0.1"],
+  experimental: {
+    // The proxy's default 10 MB cap would reject a legal upload before the attachment
+    // policy (ATTACHMENT_MAX_BYTES, default 25 MB) can respond. The policy remains the limit.
+    proxyClientMaxBodySize: "30mb",
+    serverActions: { bodySizeLimit: "2mb" },
+  },
   // Every page is per-user and permission-checked, so pages render at request time.
   // Cache Components / partial prefetching are intentionally off (docs/ARCHITECTURE-PLAN.md §9).
   cacheComponents: false,

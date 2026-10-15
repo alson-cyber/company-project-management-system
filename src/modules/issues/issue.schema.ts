@@ -140,6 +140,11 @@ export const updateCriterionSchema = z.object({
   isMet: z.boolean().optional(),
 });
 
+export const moveCriterionSchema = z.object({
+  criterionId: z.uuid("Unknown criterion."),
+  direction: z.enum(["up", "down"]),
+});
+
 export const criterionIdSchema = z.object({
   criterionId: z.uuid("Unknown criterion."),
 });

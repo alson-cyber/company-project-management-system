@@ -24,6 +24,9 @@ async function main(): Promise<void> {
     }
     await client.query(`
       TRUNCATE TABLE
+        issue_notes,
+        issue_comments,
+        issue_attachments,
         activity_events,
         issue_labels,
         acceptance_criteria,

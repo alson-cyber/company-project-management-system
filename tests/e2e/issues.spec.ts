@@ -108,8 +108,18 @@ test("selecting a user story opens the inspector without leaving the hierarchy",
   await expect(page.getByRole("tree", { name: "Work breakdown" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Notes" })).toBeVisible();
   await page.getByRole("tab", { name: "Notes" }).click();
-  await expect(page.getByRole("heading", { name: "Notes are not in this stage" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Add note" })).toHaveCount(0);
+  await expect(page.getByText("No notes yet.")).toBeVisible();
+  await page.getByLabel("Internal note").fill("Concierge still gets walk-up requests");
+  await page.getByRole("button", { name: "Status, In Progress" }).click();
+  await page.getByRole("menuitem", { name: "In Review" }).click();
+  await expect(page.getByLabel("Internal note")).toHaveValue("Concierge still gets walk-up requests");
+  await expect(page.getByRole("button", { name: "Status, In Review" })).toBeVisible();
+  await page.getByRole("button", { name: "Add note" }).click();
+  await expect(page.getByText("Concierge still gets walk-up requests")).toBeVisible();
+  await expect(page).toHaveURL(/section=notes/);
+  await page.getByRole("button", { name: "Status, In Review" }).click();
+  await page.getByRole("menuitem", { name: "In Progress" }).click();
+  await expect(page.getByRole("button", { name: "Status, In Progress" })).toBeVisible();
 });
 
 test("a permalink opens the issue in the inspector", async ({ page }) => {
@@ -123,11 +133,16 @@ test("a permalink opens the issue in the inspector", async ({ page }) => {
   await page.goto("/issues/AQUA-6");
   await expect(page).toHaveURL(/\/projects\/AQUA\/issues\/6$/);
   await expect(page.getByRole("heading", { name: "Implement availability API" })).toBeVisible();
+  await expect(page.getByText("Part of")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open governing story AQUA-2, Streamline guest booking flow" })).toBeVisible();
   await page.getByRole("tab", { name: "Sub-tasks" }).click();
   await expect(
-    page.getByRole("tabpanel", { name: "Sub-tasks" }).getByRole("link", { name: /Cache daily availability/ }),
+    page.getByRole("tabpanel", { name: /Sub-tasks/ }).getByRole("link", { name: /Cache daily availability/ }),
   ).toBeVisible();
-  await expect(page.getByText(/Governing story/)).toBeVisible();
+
+  await page.goto("/projects/AQUA/issues/6?section=comments");
+  await expect(page.getByRole("tab", { name: "Comments" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByText("No comments yet.")).toBeVisible();
 });
 
 test("mobile keeps navigation, hierarchy, and the issue reachable", async ({ page }) => {

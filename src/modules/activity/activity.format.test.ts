@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { describeActivity } from "@/modules/activity/activity.format";
+import { activityDetail, describeActivity } from "@/modules/activity/activity.format";
 
 describe("describeActivity", () => {
   test("renders a health change from structured before/after values", () => {
@@ -36,6 +36,36 @@ describe("describeActivity", () => {
         after: { status: "DONE" },
       }),
     ).toBe("changed status from To Do to Done");
+    expect(
+      describeActivity({
+        id: "3",
+        occurredAt: new Date(),
+        action: "issue.updated",
+        actorName: "Alson",
+        before: { assigneeId: "a", assigneeName: "Sarah Kim" },
+        after: { assigneeId: "b", assigneeName: "Alex Noor" },
+      }),
+    ).toBe("changed the assignee from Sarah Kim to Alex Noor");
+    expect(
+      describeActivity({
+        id: "4",
+        occurredAt: new Date(),
+        action: "issue.attachment_added",
+        actorName: "Mika",
+        before: null,
+        after: { filename: "booking-reference.png" },
+      }),
+    ).toBe("uploaded booking-reference.png");
+    expect(
+      activityDetail({
+        id: "2",
+        occurredAt: new Date(),
+        action: "issue.updated",
+        actorName: "Sarah",
+        before: { status: "TO_DO" },
+        after: { status: "IN_PROGRESS" },
+      }),
+    ).toBe("To Do → In Progress");
   });
 
   test("does not invent wording for unknown actions", () => {

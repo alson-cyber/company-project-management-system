@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { beforeAll, describe, expect, test } from "vitest";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/server/errors";
 import { loadAuthContext } from "@/server/access/load-context";
 import { seedDevelopmentData } from "@/modules/dev/dev-seed";
@@ -8,10 +8,6 @@ import { authContextFor, emails, resetDevelopmentSeed, testDb } from "./helpers"
 
 beforeAll(async () => {
   await resetDevelopmentSeed();
-});
-
-afterAll(async () => {
-  await testDb.$disconnect();
 });
 
 describe("development seed", () => {

@@ -1,244 +1,811 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type KeyboardEvent, type ReactNode } from "react";
 import Link from "next/link";
-import {
-  ArchiveRestoreForm,
-  CriteriaManager,
-  IssuePropertiesForm,
-  LabelsForm,
-  StoryFieldsForm,
-} from "@/components/issues/issue-forms";
+import { usePathname, useRouter } from "next/navigation";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import type { IssueType } from "@/generated/prisma/enums";
+import { patchIssueAction, setLabelsAction, setStoryFieldsAction } from "@/app/(app)/issues/actions";
+import { AttachmentsPanel, CommentsPanel, NotesPanel } from "@/components/issues/collaboration-panels";
+import { CreateIssueForm } from "@/components/issues/create-issue-form";
+import { CriteriaEditor } from "@/components/issues/criteria-editor";
+import { ArchiveRestoreForm } from "@/components/issues/issue-forms";
+import { type InspectorSection } from "@/components/issues/inspector-section";
+import { useDraft } from "@/components/issues/use-draft";
 import { Avatar } from "@/components/ui/avatar";
-import { IssuePriorityBadge, IssueStatusBadge, IssueTypeBadge } from "@/components/ui/issue-badges";
 import { cn } from "@/components/ui/cn";
-import { formatDate, formatDateTime } from "@/components/ui/format";
-import { describeActivity, type ActivityEventView } from "@/modules/activity/activity.format";
-import { ISSUE_TYPE_LABELS } from "@/modules/issues/issue.constants";
+import { controlClasses, TextArea, TextInput } from "@/components/ui/field";
+import { formatDate, formatDateTime, toDate } from "@/components/ui/format";
+import { IssuePriorityBadge, IssueStatusBadge, IssueTypeBadge } from "@/components/ui/issue-badges";
+import { calendarDayUtc } from "@/lib/calendar";
+import { activityDetail, activityKind, describeActivity, type ActivityEventView } from "@/modules/activity/activity.format";
+import type { AttachmentView, CommentView, NoteView } from "@/modules/collaboration/collaboration.queries";
+import {
+  ISSUE_PRIORITIES,
+  ISSUE_PRIORITY_LABELS,
+  ISSUE_STATUSES,
+  ISSUE_STATUS_LABELS,
+} from "@/modules/issues/issue.constants";
 import type { IssueDetail, IssueListItem } from "@/modules/issues/issue.queries";
 
-const TABS = ["Details", "Notes", "Attachments", "Comments", "Activity", "Sub-tasks"] as const;
-type InspectorTab = (typeof TABS)[number];
+export type { InspectorSection } from "@/components/issues/inspector-section";
+
+const menuItemClass =
+  "flex w-full cursor-pointer items-center rounded-md px-2 py-2 text-left text-sm outline-none data-[highlighted]:bg-surface-3";
 
 export function IssueInspector({
   issue,
   members,
   activity,
   childIssues,
+  notes,
+  comments,
+  attachments,
+  viewer,
+  initialSection,
 }: {
   issue: IssueDetail;
   members: Array<{ id: string; name: string }>;
   activity: ActivityEventView[];
   childIssues: IssueListItem[];
+  notes: NoteView[];
+  comments: CommentView[];
+  attachments: AttachmentView[];
+  viewer: { id: string; canModerate: boolean };
+  initialSection: InspectorSection;
 }) {
-  const [tab, setTab] = useState<InspectorTab>("Details");
+  const pathname = usePathname();
+  const { pendingField, message, patch } = useIssuePatch(issue);
+  const [section, setSection] = useState(initialSection);
+  const [syncedSection, setSyncedSection] = useState(initialSection);
+  if (initialSection !== syncedSection) {
+    setSyncedSection(initialSection);
+    setSection(initialSection);
+  }
+
+  const editable = issue.canMutate && !issue.archivedAt;
+  const childLabel = childTabLabel(issue.type);
+  const tabs: Array<{ id: InspectorSection; label: string; count?: number }> = [
+    { id: "details", label: "Details" },
+    { id: "notes", label: "Notes", count: notes.length },
+    { id: "attachments", label: "Attachments", count: attachments.length },
+    { id: "comments", label: "Comments", count: comments.length },
+    { id: "activity", label: "Activity", count: activity.length },
+    { id: "children", label: childLabel, count: issue.type === "SUB_TASK" ? undefined : childIssues.length },
+  ];
+
+  function selectSection(next: InspectorSection) {
+    setSection(next);
+    const params = new URLSearchParams(window.location.search);
+    if (next === "details") params.delete("section");
+    else params.set("section", next);
+    const query = params.toString();
+    window.history.replaceState(null, "", query ? `${pathname}?${query}` : pathname);
+  }
+
+  function onTabKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    const current = tabs.findIndex((tab) => tab.id === section);
+    let next = current;
+    if (event.key === "ArrowRight") next = (current + 1) % tabs.length;
+    else if (event.key === "ArrowLeft") next = (current - 1 + tabs.length) % tabs.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = tabs.length - 1;
+    else return;
+    event.preventDefault();
+    const tab = tabs[next];
+    if (!tab) return;
+    selectSection(tab.id);
+    document.getElementById(`issue-tab-${tab.id}`)?.focus();
+  }
+
+  const target = {
+    id: issue.id,
+    number: issue.number,
+    projectKey: issue.project.key,
+    canMutate: issue.canMutate,
+    archived: Boolean(issue.archivedAt),
+  };
 
   return (
     <div className="flex min-h-0 flex-col">
       <header className="sticky top-0 z-10 border-b border-line bg-surface px-4 py-4 sm:px-5">
         <div className="mb-3 flex items-center justify-between gap-3">
-          <Link
-            href={`/projects/${issue.project.key}/issues`}
-            scroll={false}
-            className="text-sm font-medium text-accent-strong"
-          >
+          <Link href={`/projects/${issue.project.key}/issues`} scroll={false} className="text-sm font-medium text-accent-strong">
             <span className="lg:hidden">Back to hierarchy</span>
             <span className="hidden lg:inline">Close</span>
           </Link>
           {issue.canMutate ? (
             <details className="relative">
-              <summary className="cursor-pointer list-none rounded px-2 py-1 text-[13px] font-medium text-muted marker:content-none hover:bg-surface-2 hover:text-ink [&::-webkit-details-marker]:hidden">
+              <summary className="cursor-pointer list-none rounded-md px-2 py-1.5 text-[13px] font-medium text-muted hover:bg-surface-3 hover:text-ink [&::-webkit-details-marker]:hidden">
                 More actions
               </summary>
               <div className="absolute right-0 z-20 mt-1 w-72 rounded-lg border border-line bg-surface p-3">
                 <h3 className="text-sm font-semibold">{issue.archivedAt ? "Restore" : "Archive"}</h3>
-                <p className="mb-2 mt-1 text-[13px] leading-relaxed text-muted">
-                  History is kept. The issue key is not reused.
-                </p>
+                <p className="mb-2 mt-1 text-[13px] leading-relaxed text-muted">History is kept. The issue key is not reused.</p>
                 <ArchiveRestoreForm issue={issue} />
               </div>
             </details>
           ) : null}
         </div>
+
         <div className="flex flex-wrap items-center gap-2">
           <IssueTypeBadge type={issue.type} />
           <span className="font-mono text-[13px] text-muted">{issue.key}</span>
-          <IssueStatusBadge status={issue.status} />
-          <IssuePriorityBadge priority={issue.priority} />
           {issue.overdue ? <span className="text-xs font-semibold text-danger">Overdue</span> : null}
           {issue.archivedAt ? <span className="text-xs font-semibold text-warning">Archived</span> : null}
         </div>
-        <h2 className="mt-2 text-xl font-semibold tracking-[-0.02em]">{issue.title}</h2>
-        <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted">
-          {issue.assignee ? <Avatar name={issue.assignee.name} size="sm" className="size-6 text-xs" /> : null}
-          <span>{issue.assignee?.name ?? "Unassigned"}</span>
-          {issue.dueDate ? <span>Due {formatDate(issue.dueDate)}</span> : null}
-          {issue.parent ? (
-            <span>
-              Parent{" "}
-              <Link
-                href={`/projects/${issue.project.key}/issues/${issue.parent.key.split("-").at(-1)}`}
-                scroll={false}
-                className="font-medium text-ink"
-              >
-                {issue.parent.key}
-              </Link>
-            </span>
-          ) : null}
-        </p>
+
+        <TitleEditor issue={issue} editable={editable} pending={pendingField === "title"} onSave={(title) => patch("title", { title })} />
+
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          <ChoiceMenu
+            label={`Status, ${ISSUE_STATUS_LABELS[issue.status]}`}
+            disabled={!editable || pendingField === "status"}
+            trigger={<IssueStatusBadge status={issue.status} />}
+          >
+            {ISSUE_STATUSES.map((status) => (
+              <DropdownMenu.Item key={status} className={menuItemClass} onSelect={() => void patch("status", { status })}>
+                {ISSUE_STATUS_LABELS[status]}
+              </DropdownMenu.Item>
+            ))}
+          </ChoiceMenu>
+          <ChoiceMenu
+            label={`Priority, ${ISSUE_PRIORITY_LABELS[issue.priority]}`}
+            disabled={!editable || pendingField === "priority"}
+            trigger={<IssuePriorityBadge priority={issue.priority} />}
+          >
+            {ISSUE_PRIORITIES.map((priority) => (
+              <DropdownMenu.Item key={priority} className={menuItemClass} onSelect={() => void patch("priority", { priority })}>
+                {ISSUE_PRIORITY_LABELS[priority]}
+              </DropdownMenu.Item>
+            ))}
+          </ChoiceMenu>
+          <AssigneeMenu
+            issue={issue}
+            members={members}
+            disabled={!editable || pendingField === "assignee"}
+            onSelect={(assigneeId) => void patch("assignee", { assigneeId })}
+          />
+        </div>
+        {message ? (
+          <p
+            role={message.tone === "error" ? "alert" : "status"}
+            className={cn("mt-2 text-[13px] font-medium", message.tone === "error" ? "text-danger" : "text-muted")}
+          >
+            {message.text}
+          </p>
+        ) : null}
       </header>
 
-      {issue.type === "USER_STORY" && issue.story ? (
-        <div className="border-b border-line bg-surface-2 px-5 py-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted">User story</p>
-          <p className="mt-2 text-[15px] leading-relaxed">
-            <span className="text-muted">As a </span>
-            {issue.story.asA}
-          </p>
-          <p className="mt-1 text-[15px] leading-relaxed">
-            <span className="text-muted">I want </span>
-            {issue.story.iWant}
-          </p>
-          <p className="mt-1 text-[15px] leading-relaxed">
-            <span className="text-muted">So that </span>
-            {issue.story.soThat}
-          </p>
-          {issue.acceptanceCriteria.length === 0 ? (
-            <p className="mt-3 text-[13px] text-warning">No acceptance criteria yet.</p>
-          ) : null}
-        </div>
-      ) : null}
-
-      {issue.governingStory ? (
-        <div className="border-b border-line px-5 py-3 text-[13px] leading-relaxed">
-          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted">Governing story</p>
-          <p className="mt-1">
-            <Link
-              href={`/projects/${issue.project.key}/issues/${issue.governingStory.key.split("-").at(-1)}`}
-              scroll={false}
-              className="font-mono font-medium"
-            >
-              {issue.governingStory.key}
-            </Link>{" "}
-            {issue.governingStory.title}
-          </p>
-          <p className="mt-1 text-muted">
-            As a {issue.governingStory.asA}, I want {issue.governingStory.iWant}, so that {issue.governingStory.soThat}
-          </p>
-        </div>
-      ) : null}
-
-      <div role="tablist" aria-label="Issue sections" className="flex gap-1 overflow-x-auto border-b border-line px-3">
-        {TABS.map((name) => (
-          <button
-            key={name}
-            type="button"
-            role="tab"
-            id={`issue-tab-${name}`}
-            aria-selected={tab === name}
-            aria-controls={`issue-panel-${name}`}
-            className={cn(
-              "shrink-0 border-b-2 px-2.5 py-2.5 text-[13px]",
-              tab === name ? "border-accent font-semibold text-ink" : "border-transparent text-muted hover:text-ink",
-            )}
-            onClick={() => setTab(name)}
-          >
-            {name}
-          </button>
-        ))}
-      </div>
+      {issue.governingStory ? <GoverningStory projectKey={issue.project.key} story={issue.governingStory} /> : null}
 
       <div
-        role="tabpanel"
-        id={`issue-panel-${tab}`}
-        aria-labelledby={`issue-tab-${tab}`}
-        className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5"
+        role="tablist"
+        aria-label="Issue sections"
+        className="flex gap-1 overflow-x-auto border-b border-line px-3"
+        onKeyDown={onTabKeyDown}
       >
-        {tab === "Details" ? (
-          <Details issue={issue} members={members} />
-        ) : null}
-        {tab === "Notes" ? (
-          <Deferred
-            title="Notes are not in this stage"
-            body="Notes will be a separate, durable record. They are not comments and they are not activity."
+        {tabs.map((tab) => {
+          const selected = section === tab.id;
+          const name = tab.count ? `${tab.label} ${tab.count}` : tab.label;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              id={`issue-tab-${tab.id}`}
+              aria-selected={selected}
+              aria-controls={`issue-panel-${tab.id}`}
+              tabIndex={selected ? 0 : -1}
+              className={cn(
+                "shrink-0 border-b-2 px-2.5 py-3 text-[13px]",
+                selected ? "border-accent font-semibold text-ink" : "border-transparent text-muted hover:text-ink",
+              )}
+              onClick={() => selectSection(tab.id)}
+            >
+              {name}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <section role="tabpanel" id="issue-panel-details" aria-labelledby="issue-tab-details" hidden={section !== "details"} className="px-4 py-4 sm:px-5">
+          <Details
+            issue={issue}
+            editable={editable}
+            childCount={childIssues.length}
+            childLabel={childLabel}
+            onOpenChildren={() => selectSection("children")}
+            patch={patch}
+            pendingField={pendingField}
           />
-        ) : null}
-        {tab === "Attachments" ? (
-          <Deferred
-            title="Attachments are not in this stage"
-            body="Files will be stored through the storage interface. There is nothing to upload yet."
-          />
-        ) : null}
-        {tab === "Comments" ? (
-          <Deferred
-            title="Comments are not in this stage"
-            body="Discussion will live in its own thread. This panel will not invent messages."
-          />
-        ) : null}
-        {tab === "Activity" ? <ActivityList activity={activity} /> : null}
-        {tab === "Sub-tasks" ? (
-          <ChildList projectKey={issue.project.key} type={issue.type} childIssues={childIssues} />
-        ) : null}
+        </section>
+        <section role="tabpanel" id="issue-panel-notes" aria-labelledby="issue-tab-notes" hidden={section !== "notes"} className="px-4 py-4 sm:px-5">
+          <NotesPanel issue={target} notes={notes} viewerId={viewer.id} canModerate={viewer.canModerate} />
+        </section>
+        <section
+          role="tabpanel"
+          id="issue-panel-attachments"
+          aria-labelledby="issue-tab-attachments"
+          hidden={section !== "attachments"}
+          className="px-4 py-4 sm:px-5"
+        >
+          <AttachmentsPanel issue={target} attachments={attachments} />
+        </section>
+        <section role="tabpanel" id="issue-panel-comments" aria-labelledby="issue-tab-comments" hidden={section !== "comments"} className="px-4 py-4 sm:px-5">
+          <CommentsPanel issue={target} comments={comments} viewerId={viewer.id} canModerate={viewer.canModerate} />
+        </section>
+        <section role="tabpanel" id="issue-panel-activity" aria-labelledby="issue-tab-activity" hidden={section !== "activity"} className="px-4 py-4 sm:px-5">
+          <ActivityList activity={activity} />
+        </section>
+        <section role="tabpanel" id="issue-panel-children" aria-labelledby="issue-tab-children" hidden={section !== "children"} className="px-4 py-4 sm:px-5">
+          <ChildWork issue={issue} childIssues={childIssues} members={members} label={childLabel} />
+        </section>
       </div>
     </div>
   );
 }
 
-function Details({ issue, members }: { issue: IssueDetail; members: Array<{ id: string; name: string }> }) {
+function useIssuePatch(issue: IssueDetail) {
+  const router = useRouter();
+  const [pendingField, setPendingField] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ tone: "error" | "success"; text: string } | null>(null);
+
+  async function patch(field: string, values: Record<string, string>) {
+    setPendingField(field);
+    setMessage(null);
+    const form = new FormData();
+    form.set("issueId", issue.id);
+    form.set("projectKey", issue.project.key);
+    form.set("issueNumber", String(issue.number));
+    for (const [key, value] of Object.entries(values)) form.set(key, value);
+    const result = await patchIssueAction(null, form);
+    setPendingField(null);
+    if (!result?.ok) {
+      setMessage({ tone: "error", text: result?.error.message ?? "Could not save." });
+      return false;
+    }
+    setMessage({ tone: "success", text: result.data.changed === false ? "No changes to save." : "Saved." });
+    router.refresh();
+    return true;
+  }
+
+  return { pendingField, message, patch };
+}
+
+function TitleEditor({
+  issue,
+  editable,
+  pending,
+  onSave,
+}: {
+  issue: IssueDetail;
+  editable: boolean;
+  pending: boolean;
+  onSave: (title: string) => Promise<boolean>;
+}) {
+  const draft = useDraft(`${issue.id}:title`, issue.title);
+  const [editing, setEditing] = useState(false);
+
+  if (!editing) {
+    return (
+      <div className="mt-2 flex items-start gap-2">
+        <h2 className="min-w-0 flex-1 text-xl font-semibold tracking-[-0.02em]">{issue.title}</h2>
+        {editable ? (
+          <button
+            type="button"
+            className="shrink-0 rounded-md px-2 py-1 text-[13px] font-medium text-muted hover:bg-surface-3 hover:text-ink"
+            onClick={() => {
+              draft.markClean(issue.title);
+              setEditing(true);
+            }}
+          >
+            Edit title
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2">
+      <h2 className="sr-only">{issue.title}</h2>
+      <label className="sr-only" htmlFor="issue-title">
+        Issue title
+      </label>
+      <TextInput
+        id="issue-title"
+        value={draft.value}
+        disabled={pending}
+        className="text-base font-semibold"
+        onChange={(event) => draft.setValue(event.target.value)}
+        onBlur={() => {
+          const next = draft.value.trim();
+          if (!next || next === issue.title) {
+            draft.markClean(issue.title);
+            setEditing(false);
+            return;
+          }
+          void onSave(next).then((ok) => {
+            if (ok) {
+              draft.markClean(next);
+              setEditing(false);
+            }
+          });
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            draft.markClean(issue.title);
+            setEditing(false);
+          }
+        }}
+        autoFocus
+      />
+    </div>
+  );
+}
+
+function ChoiceMenu({
+  label,
+  disabled,
+  trigger,
+  children,
+}: {
+  label: string;
+  disabled?: boolean;
+  trigger: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger
+        disabled={disabled}
+        aria-label={label}
+        className="inline-flex h-9 items-center rounded-md px-1.5 hover:bg-surface-3 disabled:opacity-60"
+      >
+        {trigger}
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align="start" sideOffset={6} className="z-50 min-w-44 rounded-lg border border-line bg-surface p-1">
+          {children}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
+function AssigneeMenu({
+  issue,
+  members,
+  disabled,
+  onSelect,
+}: {
+  issue: IssueDetail;
+  members: Array<{ id: string; name: string }>;
+  disabled?: boolean;
+  onSelect: (assigneeId: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const filtered = members.filter((member) => member.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const current = issue.assignee?.name ?? "Unassigned";
+
+  return (
+    <DropdownMenu.Root onOpenChange={(open) => !open && setQuery("")}>
+      <DropdownMenu.Trigger
+        disabled={disabled}
+        aria-label={`Assignee, ${current}`}
+        className="inline-flex h-9 items-center gap-2 rounded-md px-1.5 text-[13px] hover:bg-surface-3 disabled:opacity-60"
+      >
+        {issue.assignee ? <Avatar name={issue.assignee.name} size="sm" className="size-6 text-xs" /> : null}
+        <span>{current}</span>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align="start" sideOffset={6} className="z-50 w-64 rounded-lg border border-line bg-surface p-1">
+          <div className="p-1">
+            <input
+              aria-label="Find a person"
+              value={query}
+              placeholder="Find a person"
+              className={cn(controlClasses, "h-9")}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => event.stopPropagation()}
+            />
+          </div>
+          <DropdownMenu.Item className={menuItemClass} onSelect={() => onSelect("")}>
+            Unassigned
+          </DropdownMenu.Item>
+          {filtered.map((member) => (
+            <DropdownMenu.Item key={member.id} className={menuItemClass} onSelect={() => onSelect(member.id)}>
+              {member.name}
+            </DropdownMenu.Item>
+          ))}
+          {filtered.length === 0 ? <p className="px-2 py-2 text-sm text-muted">No matches.</p> : null}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
+function GoverningStory({
+  projectKey,
+  story,
+}: {
+  projectKey: string;
+  story: NonNullable<IssueDetail["governingStory"]>;
+}) {
+  return (
+    <aside className="border-b border-line px-4 py-3 sm:px-5">
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted">Part of</p>
+      <p className="mt-1 text-sm">
+        <Link
+          href={issueHref(projectKey, story.key)}
+          scroll={false}
+          className="font-medium"
+          aria-label={`Open governing story ${story.key}, ${story.title}`}
+        >
+          {story.key} · {story.title}
+        </Link>
+      </p>
+      <div className="mt-2 text-sm leading-relaxed text-muted">
+        <p>As a {story.asA}</p>
+        <p>I want {story.iWant}</p>
+        <p>So that {story.soThat}</p>
+      </div>
+    </aside>
+  );
+}
+
+function Details({
+  issue,
+  editable,
+  childCount,
+  childLabel,
+  onOpenChildren,
+  patch,
+  pendingField,
+}: {
+  issue: IssueDetail;
+  editable: boolean;
+  childCount: number;
+  childLabel: string;
+  onOpenChildren: () => void;
+  patch: (field: string, values: Record<string, string>) => Promise<boolean>;
+  pendingField: string | null;
+}) {
   return (
     <div className="grid gap-6">
-      {(issue.type === "EPIC" || issue.type === "USER_STORY") && issue.progress.total > 0 ? (
-        <p className="text-[13px] text-muted">
-          Progress {issue.progress.percent}% ({issue.progress.done}/{issue.progress.total} executable items done)
-        </p>
-      ) : null}
-      {issue.canMutate && !issue.archivedAt ? (
-        <IssuePropertiesForm issue={issue} members={members} />
-      ) : (
-        <p className="whitespace-pre-wrap text-sm">{issue.description ?? "No description."}</p>
-      )}
-      {issue.story && issue.canMutate && !issue.archivedAt ? (
-        <section className="grid gap-2">
-          <h3 className="text-sm font-semibold">Edit story</h3>
-          <StoryFieldsForm issue={{ ...issue.story, id: issue.id, number: issue.number, project: issue.project }} />
-        </section>
-      ) : null}
+      {issue.type === "USER_STORY" && issue.story ? <StoryDocument issue={issue} story={issue.story} editable={editable} /> : null}
+      <DescriptionEditor
+        issue={issue}
+        editable={editable}
+        pending={pendingField === "description"}
+        onSave={(description) => patch("description", { description })}
+      />
       {issue.type === "USER_STORY" ? (
-        <section className="grid gap-2">
-          <h3 className="text-sm font-semibold">Acceptance criteria</h3>
-          {issue.canMutate && !issue.archivedAt ? (
-            <CriteriaManager
-              issueId={issue.id}
-              projectKey={issue.project.key}
-              issueNumber={issue.number}
-              criteria={issue.acceptanceCriteria}
-            />
-          ) : (
-            <ul className="grid gap-1 text-sm">
-              {issue.acceptanceCriteria.map((criterion) => (
-                <li key={criterion.id}>
-                  {criterion.isMet ? "Met" : "Open"} — {criterion.text}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+        <CriteriaEditor
+          issueId={issue.id}
+          projectKey={issue.project.key}
+          issueNumber={issue.number}
+          criteria={issue.acceptanceCriteria}
+          canMutate={editable}
+        />
       ) : null}
-      <section>
-        <h3 className="mb-2 text-sm font-semibold">Labels</h3>
-        {issue.canMutate && !issue.archivedAt ? (
-          <LabelsForm issue={issue} />
-        ) : (
-          <p className="text-sm">{issue.labels.map((label) => label.name).join(", ") || "None"}</p>
-        )}
-      </section>
-      <section className="grid gap-1 text-[13px] text-muted">
-        <p>Reporter {issue.reporter.name}</p>
-        <p>Creator {issue.creator.name}</p>
-        <p>
-          Created {formatDateTime(issue.createdAt)} · Updated {formatDateTime(issue.updatedAt)}
+      {issue.type !== "SUB_TASK" ? (
+        <p className="text-sm">
+          <button type="button" className="font-medium text-accent-strong" onClick={onOpenChildren}>
+            {childCount === 0 ? `No ${childLabel.toLowerCase()} yet` : `${childCount} ${childLabel.toLowerCase()}`}
+          </button>
+          {issue.progress.total > 0 ? (
+            <span className="text-muted">
+              {" "}
+              · {issue.progress.done}/{issue.progress.total} done
+            </span>
+          ) : null}
         </p>
-      </section>
+      ) : null}
+      <Properties issue={issue} editable={editable} pending={pendingField === "due" || pendingField === "labels"} patch={patch} />
+    </div>
+  );
+}
+
+function StoryDocument({
+  issue,
+  story,
+  editable,
+}: {
+  issue: IssueDetail;
+  story: NonNullable<IssueDetail["story"]>;
+  editable: boolean;
+}) {
+  const router = useRouter();
+  const asA = useDraft(`${issue.id}:asA`, story.asA);
+  const iWant = useDraft(`${issue.id}:iWant`, story.iWant);
+  const soThat = useDraft(`${issue.id}:soThat`, story.soThat);
+  const [editing, setEditing] = useState<"asA" | "iWant" | "soThat" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function save(next: { asA: string; iWant: string; soThat: string }) {
+    setPending(true);
+    setError(null);
+    const form = new FormData();
+    form.set("issueId", issue.id);
+    form.set("projectKey", issue.project.key);
+    form.set("issueNumber", String(issue.number));
+    form.set("asA", next.asA);
+    form.set("iWant", next.iWant);
+    form.set("soThat", next.soThat);
+    const result = await setStoryFieldsAction(null, form);
+    setPending(false);
+    if (!result?.ok) {
+      setError(result?.error.message ?? "Could not save the story.");
+      return false;
+    }
+    asA.markClean(next.asA);
+    iWant.markClean(next.iWant);
+    soThat.markClean(next.soThat);
+    setEditing(null);
+    router.refresh();
+    return true;
+  }
+
+  const lines = [
+    { key: "asA" as const, lead: "As a", value: asA.value, setValue: asA.setValue },
+    { key: "iWant" as const, lead: "I want", value: iWant.value, setValue: iWant.setValue },
+    { key: "soThat" as const, lead: "So that", value: soThat.value, setValue: soThat.setValue },
+  ];
+
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted">User story</p>
+      <div className="mt-2 grid gap-1">
+        {lines.map((line) =>
+          editing === line.key ? (
+            <div key={line.key}>
+              <label htmlFor={`story-${line.key}`} className="text-[13px] text-muted">
+                {line.lead}
+              </label>
+              <TextInput
+                id={`story-${line.key}`}
+                value={line.value}
+                disabled={pending}
+                autoFocus
+                onChange={(event) => line.setValue(event.target.value)}
+                onBlur={() => {
+                  void save({ asA: asA.value, iWant: iWant.value, soThat: soThat.value });
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setEditing(null);
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void save({ asA: asA.value, iWant: iWant.value, soThat: soThat.value });
+                  }
+                }}
+              />
+            </div>
+          ) : (
+            <p key={line.key} className="text-[15px] leading-relaxed">
+              <span className="text-muted">{line.lead} </span>
+              {editable ? (
+                <button type="button" className="text-left" onClick={() => setEditing(line.key)}>
+                  {line.value}
+                  <span className="sr-only">, edit {line.lead}</span>
+                </button>
+              ) : (
+                line.value
+              )}
+            </p>
+          ),
+        )}
+      </div>
+      {error ? (
+        <p role="alert" className="mt-2 text-[13px] font-medium text-danger">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function DescriptionEditor({
+  issue,
+  editable,
+  pending,
+  onSave,
+}: {
+  issue: IssueDetail;
+  editable: boolean;
+  pending: boolean;
+  onSave: (description: string) => Promise<boolean>;
+}) {
+  const draft = useDraft(`${issue.id}:description`, issue.description ?? "");
+  const [editing, setEditing] = useState(draft.dirty);
+
+  return (
+    <section className="grid gap-2">
+      <h3 className="text-sm font-semibold">Description</h3>
+      {editing && editable ? (
+        <>
+          <label className="sr-only" htmlFor="issue-description">
+            Description
+          </label>
+          <TextArea
+            id="issue-description"
+            rows={6}
+            value={draft.value}
+            disabled={pending}
+            onChange={(event) => draft.setValue(event.target.value)}
+          />
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="text-[13px] font-semibold text-accent-strong"
+              disabled={pending}
+              onClick={() => {
+                void onSave(draft.value).then((ok) => {
+                  if (ok) {
+                    draft.markClean(draft.value);
+                    setEditing(false);
+                  }
+                });
+              }}
+            >
+              {pending ? "Saving…" : "Save description"}
+            </button>
+            <button
+              type="button"
+              className="text-[13px] font-medium text-muted"
+              onClick={() => {
+                draft.markClean(issue.description ?? "");
+                setEditing(false);
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </>
+      ) : (
+        <button
+          type="button"
+          className="whitespace-pre-wrap text-left text-sm leading-relaxed disabled:cursor-default"
+          disabled={!editable}
+          onClick={() => editable && setEditing(true)}
+        >
+          {draft.value || <span className="text-muted">No description.</span>}
+          {editable ? <span className="sr-only"> Edit description</span> : null}
+        </button>
+      )}
+    </section>
+  );
+}
+
+function Properties({
+  issue,
+  editable,
+  pending,
+  patch,
+}: {
+  issue: IssueDetail;
+  editable: boolean;
+  pending: boolean;
+  patch: (field: string, values: Record<string, string>) => Promise<boolean>;
+}) {
+  const dueDate = toDate(issue.dueDate);
+  const dueServer = dueDate ? calendarDayUtc(dueDate) : "";
+  const due = useDraft(`${issue.id}:due`, dueServer);
+  const labelServer = issue.labels.map((label) => label.name).join(", ");
+  const labels = useDraft(`${issue.id}:labels`, labelServer);
+  const [editingLabels, setEditingLabels] = useState(false);
+  const router = useRouter();
+  const [labelError, setLabelError] = useState<string | null>(null);
+
+  return (
+    <dl className="border-t border-line">
+      <Property label="Reporter">{issue.reporter.name}</Property>
+      {issue.creator.id !== issue.reporter.id ? <Property label="Creator">{issue.creator.name}</Property> : null}
+      <Property label="Parent">
+        {issue.parent ? (
+          <Link href={issueHref(issue.project.key, issue.parent.key)} scroll={false} className="font-medium">
+            {issue.parent.key} · {issue.parent.title}
+          </Link>
+        ) : (
+          <span className="text-muted">None</span>
+        )}
+      </Property>
+      <Property label="Project">{issue.project.name}</Property>
+      <Property label="Due date">
+        {editable ? (
+          <input
+            type="date"
+            aria-label="Due date"
+            value={due.value}
+            disabled={pending}
+            className={cn(controlClasses, "h-11 max-w-52 sm:h-9")}
+            onChange={(event) => {
+              const value = event.target.value;
+              due.setValue(value);
+              void patch("due", { dueDate: value }).then((ok) => {
+                if (ok) due.markClean(value);
+                else due.markClean(dueServer);
+              });
+            }}
+          />
+        ) : (
+          <span>{dueServer ? formatDate(issue.dueDate) : "None"}</span>
+        )}
+      </Property>
+      <Property label="Labels">
+        {editingLabels && editable ? (
+          <div className="grid gap-2">
+            <label className="sr-only" htmlFor="issue-labels">
+              Labels
+            </label>
+            <TextInput
+              id="issue-labels"
+              value={labels.value}
+              onChange={(event) => labels.setValue(event.target.value)}
+              placeholder="Comma-separated labels"
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="text-[13px] font-semibold text-accent-strong"
+                onClick={() => {
+                  setLabelError(null);
+                  const form = new FormData();
+                  form.set("issueId", issue.id);
+                  form.set("projectKey", issue.project.key);
+                  form.set("issueNumber", String(issue.number));
+                  form.set("labels", labels.value);
+                  void setLabelsAction(null, form).then((result) => {
+                    if (!result?.ok) {
+                      setLabelError(result?.error.message ?? "Could not save labels.");
+                      return;
+                    }
+                    labels.markClean(labels.value);
+                    setEditingLabels(false);
+                    router.refresh();
+                  });
+                }}
+              >
+                Save labels
+              </button>
+              <button
+                type="button"
+                className="text-[13px] font-medium text-muted"
+                onClick={() => {
+                  labels.markClean(labelServer);
+                  setEditingLabels(false);
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+            {labelError ? (
+              <p role="alert" className="text-[13px] font-medium text-danger">
+                {labelError}
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <button type="button" className="text-left disabled:cursor-default" disabled={!editable} onClick={() => editable && setEditingLabels(true)}>
+            {issue.labels.length > 0 ? issue.labels.map((label) => label.name).join(", ") : <span className="text-muted">None</span>}
+            {editable ? <span className="sr-only"> Edit labels</span> : null}
+          </button>
+        )}
+      </Property>
+      <Property label="Created">{formatDateTime(issue.createdAt)}</Property>
+      <Property label="Updated">{formatDateTime(issue.updatedAt)}</Property>
+    </dl>
+  );
+}
+
+function Property({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="grid gap-1 border-b border-line py-3 sm:grid-cols-[7.5rem_minmax(0,1fr)] sm:items-center sm:gap-3">
+      <dt className="text-[13px] text-muted">{label}</dt>
+      <dd className="min-w-0 text-sm">{children}</dd>
     </div>
   );
 }
@@ -246,60 +813,90 @@ function Details({ issue, members }: { issue: IssueDetail; members: Array<{ id: 
 function ActivityList({ activity }: { activity: ActivityEventView[] }) {
   if (activity.length === 0) return <p className="text-sm text-muted">No activity yet.</p>;
   return (
-    <ol className="grid gap-3">
-      {activity.map((event) => (
-        <li key={event.id} className="text-[13px]">
-          <p>
-            <span className="font-semibold">{event.actorName ?? "System"}</span>{" "}
-            <span className="text-muted">{describeActivity(event)}</span>
-          </p>
-          <time className="text-xs text-muted-2" dateTime={event.occurredAt.toISOString()}>
-            {formatDateTime(event.occurredAt)}
-          </time>
-        </li>
-      ))}
+    <ol className="grid">
+      {activity.map((event) => {
+        const detail = activityDetail(event);
+        const occurred = toDate(event.occurredAt);
+        return (
+          <li key={event.id} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 border-b border-line py-3">
+            <span className="pt-0.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-2">{activityKind(event)}</span>
+            <div>
+              <p className="text-sm">
+                <span className="font-semibold">{event.actorName ?? "System"}</span>{" "}
+                <span className="text-muted">{describeActivity(event)}</span>
+              </p>
+              {detail ? <p className="mt-0.5 text-sm text-ink">{detail}</p> : null}
+              {occurred ? (
+                <time className="mt-0.5 block text-xs text-muted-2" dateTime={occurred.toISOString()}>
+                  {formatDateTime(occurred)}
+                </time>
+              ) : null}
+            </div>
+          </li>
+        );
+      })}
     </ol>
   );
 }
 
-function ChildList({
-  projectKey,
-  type,
+function ChildWork({
+  issue,
   childIssues,
+  members,
+  label,
 }: {
-  projectKey: string;
-  type: IssueDetail["type"];
+  issue: IssueDetail;
   childIssues: IssueListItem[];
+  members: Array<{ id: string; name: string }>;
+  label: string;
 }) {
-  if (type === "SUB_TASK") {
-    return <p className="text-sm text-muted">Sub-tasks cannot contain other work.</p>;
-  }
-  if (childIssues.length === 0) {
-    return (
-      <p className="text-sm text-muted">
-        No {ISSUE_TYPE_LABELS[type] === "Task" ? "sub-tasks" : "children"} yet. Add one from the hierarchy row.
-      </p>
-    );
+  if (issue.type === "SUB_TASK") {
+    return <p className="text-sm text-muted">Sub-tasks do not contain other work.</p>;
   }
   return (
-    <ul className="grid gap-1">
-      {childIssues.map((child) => (
-        <li key={child.id}>
-          <Link href={`/projects/${projectKey}/issues/${child.number}`} className="flex items-baseline gap-2 rounded-md px-1 py-1.5 text-sm hover:bg-surface-3">
-            <span className="font-mono text-xs text-muted">{child.key}</span>
-            <span>{child.title}</span>
-          </Link>
-        </li>
-      ))}
-    </ul>
+    <div className="grid gap-4">
+      {issue.progress.total > 0 ? (
+        <p className="text-[13px] text-muted">
+          {issue.progress.done} / {issue.progress.total} done
+        </p>
+      ) : null}
+      {childIssues.length === 0 ? <p className="text-sm text-muted">No {label.toLowerCase()} yet.</p> : null}
+      <ul className="grid">
+        {childIssues.map((child) => (
+          <li key={child.id} className="border-b border-line">
+            <Link href={`/projects/${issue.project.key}/issues/${child.number}`} scroll={false} className="grid gap-1 py-2.5 hover:bg-surface-2">
+              <span className="flex items-baseline gap-2">
+                <span className="font-mono text-xs text-muted">{child.key}</span>
+                <span className="min-w-0 flex-1 text-sm font-medium">{child.title}</span>
+              </span>
+              <span className="flex flex-wrap items-center gap-2 text-xs text-muted">
+                <IssueStatusBadge status={child.status} />
+                <span>{child.assignee?.name ?? "Unassigned"}</span>
+                {child.progress.total > 0 ? (
+                  <span>
+                    {child.progress.done}/{child.progress.total}
+                  </span>
+                ) : null}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+      {issue.allowedChildType && issue.canMutate && !issue.archivedAt ? (
+        <CreateIssueForm projectId={issue.project.id} type={issue.allowedChildType} parentId={issue.id} members={members} />
+      ) : null}
+    </div>
   );
 }
 
-function Deferred({ title, body }: { title: string; body: string }) {
-  return (
-    <div className="max-w-md py-6">
-      <h3 className="text-sm font-semibold">{title}</h3>
-      <p className="mt-1 text-sm leading-relaxed text-muted">{body}</p>
-    </div>
-  );
+function childTabLabel(type: IssueType): string {
+  if (type === "EPIC") return "Stories";
+  if (type === "USER_STORY") return "Tasks";
+  if (type === "TASK") return "Sub-tasks";
+  return "Children";
+}
+
+function issueHref(projectKey: string, issueKeyValue: string): string {
+  const number = issueKeyValue.slice(projectKey.length + 1);
+  return `/projects/${projectKey}/issues/${number}`;
 }

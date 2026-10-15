@@ -1,4 +1,6 @@
 import "dotenv/config";
+import { rm } from "node:fs/promises";
+import path from "node:path";
 import { Client } from "pg";
 import { databaseName } from "@/lib/test-database";
 
@@ -30,11 +32,20 @@ async function main(): Promise<void> {
       `SELECT id FROM issues WHERE title ~ '^E2E '`,
     );
     const ids = polluted.rows.map((row) => row.id);
+    const objectKeys: string[] = [];
     if (ids.length > 0) {
+      const files = await client.query<{ object_key: string }>(
+        `SELECT object_key FROM issue_attachments WHERE issue_id = ANY($1::text[])`,
+        [ids],
+      );
+      objectKeys.push(...files.rows.map((row) => row.object_key));
       await client.query(
         `DELETE FROM activity_events WHERE issue_id = ANY($1::text[]) OR entity_id = ANY($1::text[])`,
         [ids],
       );
+      await client.query(`DELETE FROM issue_notes WHERE issue_id = ANY($1::text[])`, [ids]);
+      await client.query(`DELETE FROM issue_comments WHERE issue_id = ANY($1::text[])`, [ids]);
+      await client.query(`DELETE FROM issue_attachments WHERE issue_id = ANY($1::text[])`, [ids]);
       await client.query(`DELETE FROM issue_labels WHERE issue_id = ANY($1::text[])`, [ids]);
       await client.query(`DELETE FROM acceptance_criteria WHERE issue_id = ANY($1::text[])`, [ids]);
       await client.query(`DELETE FROM user_story_details WHERE issue_id = ANY($1::text[])`, [ids]);
@@ -75,6 +86,15 @@ async function main(): Promise<void> {
 
     await client.query("ALTER TABLE activity_events ENABLE TRIGGER activity_events_append_only");
     await client.query("COMMIT");
+
+    const root = path.resolve(process.env.STORAGE_LOCAL_DIR ?? ".data/storage");
+    for (const key of objectKeys) {
+      const filePath = path.resolve(root, key);
+      if (!filePath.startsWith(root + path.sep)) continue;
+      await rm(filePath, { force: true });
+      await rm(`${filePath}.meta.json`, { force: true });
+    }
+
     console.log(`Cleaned ${ids.length} E2E issues from pms_dev. Restored seed epic: ${Boolean(restoredId)}.`);
   } catch (error) {
     await client.query("ROLLBACK");

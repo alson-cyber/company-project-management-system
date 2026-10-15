@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { IssueInspector } from "@/components/issues/issue-inspector";
 import { listIssueActivity } from "@/modules/activity/activity.queries";
+import { listIssueCollaboration } from "@/modules/collaboration/collaboration.queries";
+import { IssueInspector } from "@/components/issues/issue-inspector";
+import { parseInspectorSection } from "@/components/issues/inspector-section";
 import { findIssueNode } from "@/modules/issues/issue-tree.filter";
 import { getVisibleIssueByNumber, listAssignableMembers, listProjectIssueTree } from "@/modules/issues/issue.queries";
 import { getVisibleProjectByKey } from "@/modules/projects/project.queries";
+import { hasProjectPermission } from "@/server/access/policy";
 import { requireAuthContext } from "@/server/access/session";
 
 export async function generateMetadata({
@@ -19,10 +22,13 @@ export async function generateMetadata({
 
 export default async function ProjectIssuesPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ projectKey: string; issueNumber?: string[] }>;
+  searchParams: Promise<{ section?: string }>;
 }) {
   const { projectKey, issueNumber } = await params;
+  const { section } = await searchParams;
   const segments = issueNumber ?? [];
   if (segments.length > 1) notFound();
   if (segments.length === 0) {
@@ -46,10 +52,11 @@ export default async function ProjectIssuesPage({
   const issue = await getVisibleIssueByNumber(ctx, project.key, number);
   if (!issue) notFound();
 
-  const [{ tree }, members, activity] = await Promise.all([
+  const [{ tree }, members, activity, collaboration] = await Promise.all([
     listProjectIssueTree(ctx, project.id),
     listAssignableMembers(ctx, project.id),
-    listIssueActivity(ctx, issue.id, 40),
+    listIssueActivity(ctx, issue.id, 80),
+    listIssueCollaboration(ctx, issue.id),
   ]);
 
   return (
@@ -59,6 +66,14 @@ export default async function ProjectIssuesPage({
       members={members}
       activity={activity}
       childIssues={findIssueNode(tree, issue.id)?.children ?? []}
+      notes={collaboration.notes}
+      comments={collaboration.comments}
+      attachments={collaboration.attachments}
+      viewer={{
+        id: ctx.userId,
+        canModerate: hasProjectPermission(ctx, "project.manage", project.id),
+      }}
+      initialSection={parseInspectorSection(section)}
     />
   );
 }

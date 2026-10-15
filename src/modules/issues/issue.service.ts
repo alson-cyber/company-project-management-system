@@ -17,6 +17,7 @@ import {
   createIssueSchema,
   criterionIdSchema,
   issueIdSchema,
+  moveCriterionSchema,
   setIssueLabelsSchema,
   setStoryFieldsSchema,
   updateCriterionSchema,
@@ -104,6 +105,12 @@ async function requireIssue(tx: Tx, ctx: AuthContext, issueId: string, permissio
   if (!issue) throw new NotFoundError("Issue not found.");
   assertProjectPermission(ctx, permission, issue.projectId);
   return issue;
+}
+
+async function userName(tx: Tx, userId: string | null): Promise<string | null> {
+  if (!userId) return null;
+  const user = await tx.user.findUnique({ where: { id: userId }, select: { name: true } });
+  return user?.name ?? null;
 }
 
 async function assertProjectParticipant(tx: Tx, projectId: string, userId: string, field: string) {
@@ -388,6 +395,13 @@ export async function updateIssue(ctx: AuthContext, rawInput: unknown): Promise<
     const changed = diffFields(before, after);
     if (!changed) return { changed: false, key: issueKey(issue.project.key, issue.number) };
 
+    if (Object.prototype.hasOwnProperty.call(changed.before, "assigneeId")) {
+      const beforeId = typeof changed.before.assigneeId === "string" ? changed.before.assigneeId : null;
+      const afterId = typeof changed.after.assigneeId === "string" ? changed.after.assigneeId : null;
+      changed.before.assigneeName = await userName(tx, beforeId);
+      changed.after.assigneeName = await userName(tx, afterId);
+    }
+
     await writeIssueActivity(tx, ctx, {
       action: "issue.updated",
       issue: updated,
@@ -640,6 +654,85 @@ export async function removeAcceptanceCriterion(ctx: AuthContext, rawInput: unkn
       metadata: { issueKey: issueKey(criterion.issue.project.key, criterion.issue.number) },
     });
     return { removed: true };
+  });
+}
+
+export async function restoreAcceptanceCriterion(ctx: AuthContext, rawInput: unknown): Promise<{ restored: boolean }> {
+  const input = parseInput(criterionIdSchema, rawInput);
+
+  return prisma.$transaction(async (tx) => {
+    const criterion = await tx.acceptanceCriterion.findFirst({
+      where: { id: input.criterionId, deletedAt: { not: null } },
+      include: { issue: { select: { ...issueWriteSelect, project: { select: { key: true, workspaceId: true } } } } },
+    });
+    if (!criterion || criterion.issue.project.workspaceId !== ctx.workspace.id) throw new NotFoundError("Issue not found.");
+    assertProjectPermission(ctx, "project.participate", criterion.issue.projectId);
+    if (criterion.issue.archivedAt) throw new ValidationError("Archived issues cannot be edited. Restore them first.");
+
+    await tx.acceptanceCriterion.update({ where: { id: criterion.id }, data: { deletedAt: null } });
+    await recordActivity(tx, {
+      workspaceId: ctx.workspace.id,
+      actor: actorOf(ctx),
+      action: "issue.criterion_restored",
+      entityType: "acceptance_criterion",
+      entityId: criterion.id,
+      projectId: criterion.issue.projectId,
+      issueId: criterion.issue.id,
+      after: { text: criterion.text },
+      metadata: { issueKey: issueKey(criterion.issue.project.key, criterion.issue.number) },
+    });
+    return { restored: true };
+  });
+}
+
+export async function moveAcceptanceCriterion(
+  ctx: AuthContext,
+  rawInput: unknown,
+): Promise<{ changed: boolean }> {
+  const input = parseInput(moveCriterionSchema, rawInput);
+
+  return prisma.$transaction(async (tx) => {
+    const criterion = await tx.acceptanceCriterion.findFirst({
+      where: { id: input.criterionId, deletedAt: null },
+      include: { issue: { select: { ...issueWriteSelect, project: { select: { key: true, workspaceId: true } } } } },
+    });
+    if (!criterion || criterion.issue.project.workspaceId !== ctx.workspace.id) throw new NotFoundError("Issue not found.");
+    assertProjectPermission(ctx, "project.participate", criterion.issue.projectId);
+    if (criterion.issue.type !== "USER_STORY") throw new ValidationError("Acceptance criteria belong on User Stories.");
+    if (criterion.issue.archivedAt) throw new ValidationError("Archived issues cannot be edited. Restore them first.");
+
+    const ordered = await tx.acceptanceCriterion.findMany({
+      where: { issueId: criterion.issueId, deletedAt: null },
+      orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+      select: { id: true, position: true, text: true },
+    });
+    const index = ordered.findIndex((row) => row.id === criterion.id);
+    const target = input.direction === "up" ? index - 1 : index + 1;
+    if (index < 0 || target < 0 || target >= ordered.length) return { changed: false };
+
+    const next = ordered.slice();
+    const [moved] = next.splice(index, 1);
+    if (!moved) return { changed: false };
+    next.splice(target, 0, moved);
+    for (const [position, row] of next.entries()) {
+      if (row.position !== position) {
+        await tx.acceptanceCriterion.update({ where: { id: row.id }, data: { position } });
+      }
+    }
+
+    await recordActivity(tx, {
+      workspaceId: ctx.workspace.id,
+      actor: actorOf(ctx),
+      action: "issue.criterion_reordered",
+      entityType: "acceptance_criterion",
+      entityId: criterion.id,
+      projectId: criterion.issue.projectId,
+      issueId: criterion.issue.id,
+      before: { text: criterion.text, position: index },
+      after: { text: criterion.text, position: target },
+      metadata: { issueKey: issueKey(criterion.issue.project.key, criterion.issue.number) },
+    });
+    return { changed: true };
   });
 }
 
