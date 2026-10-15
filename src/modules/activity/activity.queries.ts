@@ -34,6 +34,22 @@ function toView(row: {
   };
 }
 
+export async function listIssueActivity(ctx: AuthContext, issueId: string, limit = 30): Promise<ActivityEventView[]> {
+  const issue = await prisma.issue.findFirst({
+    where: { id: issueId },
+    select: { projectId: true },
+  });
+  if (!issue) return [];
+  assertProjectPermission(ctx, "project.view", issue.projectId);
+  const rows = await prisma.activityEvent.findMany({
+    where: { workspaceId: ctx.workspace.id, issueId },
+    orderBy: { occurredAt: "desc" },
+    take: limit,
+    select: activitySelect,
+  });
+  return rows.map((row) => toView(row));
+}
+
 export async function listProjectActivity(ctx: AuthContext, projectId: string, limit = 20): Promise<ActivityEventView[]> {
   assertProjectPermission(ctx, "project.view", projectId);
   const rows = await prisma.activityEvent.findMany({

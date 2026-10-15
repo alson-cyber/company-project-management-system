@@ -29,6 +29,20 @@ export const envSchema = z
       .regex(/^[a-z0-9-]+$/)
       .default("company"),
 
+    /** IANA time zone used for "today" when computing overdue. Dates themselves are stored as calendar dates (no zone). */
+    COMPANY_TIMEZONE: z
+      .string()
+      .trim()
+      .min(1)
+      .default("UTC")
+      .superRefine((value, ctx) => {
+        try {
+          Intl.DateTimeFormat("en-US", { timeZone: value });
+        } catch {
+          ctx.addIssue({ code: "custom", message: "Must be a valid IANA time zone (for example UTC or Asia/Dubai)." });
+        }
+      }),
+
     STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
     STORAGE_LOCAL_DIR: z.string().default(".data/storage"),
     S3_BUCKET: optionalString,

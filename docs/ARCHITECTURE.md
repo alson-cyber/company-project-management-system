@@ -1,6 +1,12 @@
 # Architecture Notes
 
-## Current checkpoint
+> **Current production stack** is Next.js App Router, PostgreSQL, Prisma and Better Auth. Details: [`ARCHITECTURE-PLAN.md`](ARCHITECTURE-PLAN.md) and [`ISSUE-DOMAIN.md`](ISSUE-DOMAIN.md). `PRODUCT-RULES.md` wins if this file disagrees.
+>
+> The Checkpoint 0.5 prototype remains in `prototype/` as a visual reference. Direct AI-agent execution is **Future / Optional — Not Current Scope**.
+
+## Historical checkpoint (prototype)
+
+The original checkpoint was deliberately dependency-free:
 
 The current checkpoint is deliberately dependency-free:
 
