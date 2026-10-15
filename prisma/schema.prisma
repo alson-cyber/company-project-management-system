@@ -100,6 +100,9 @@ model User {
   issuesCompleted      Issue[]              @relation("IssueCompletedBy")
   issuesArchived       Issue[]              @relation("IssueArchivedBy")
   criteriaMarkedMet    AcceptanceCriterion[] @relation("CriterionMetBy")
+  notesAuthored        IssueNote[]           @relation("IssueNoteAuthor")
+  commentsAuthored     IssueComment[]        @relation("IssueCommentAuthor")
+  attachmentsUploaded  IssueAttachment[]     @relation("IssueAttachmentUploader")
 
   @@map("users")
 }
@@ -325,6 +328,9 @@ model Issue {
   criteria    AcceptanceCriterion[]
   labels      IssueLabel[]
   activity    ActivityEvent[]
+  notes       IssueNote[]
+  comments    IssueComment[]
+  attachments IssueAttachment[]
 
   @@unique([projectId, number])
   @@index([projectId, parentId])
@@ -392,4 +398,57 @@ model IssueLabel {
   @@id([issueId, labelId])
   @@index([labelId])
   @@map("issue_labels")
+}
+
+/// Internal working notes. Distinct from comments and from the issue description.
+model IssueNote {
+  id        String    @id @default(uuid())
+  issueId   String    @map("issue_id")
+  authorId  String    @map("author_id")
+  content   String
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  issue  Issue @relation(fields: [issueId], references: [id], onDelete: Restrict)
+  author User  @relation("IssueNoteAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([issueId, deletedAt, createdAt])
+  @@map("issue_notes")
+}
+
+/// Issue discussion. Intentionally flat: no threads, reactions, or mentions.
+model IssueComment {
+  id        String    @id @default(uuid())
+  issueId   String    @map("issue_id")
+  authorId  String    @map("author_id")
+  body      String
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  issue  Issue @relation(fields: [issueId], references: [id], onDelete: Restrict)
+  author User  @relation("IssueCommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([issueId, deletedAt, createdAt])
+  @@map("issue_comments")
+}
+
+/// File metadata. The bytes live in object storage under objectKey, never under the user's filename.
+model IssueAttachment {
+  id               String    @id @default(uuid())
+  issueId          String    @map("issue_id")
+  uploadedById     String    @map("uploaded_by_id")
+  originalFilename String    @map("original_filename")
+  objectKey        String    @unique @map("object_key")
+  contentType      String    @map("content_type")
+  sizeBytes        Int       @map("size_bytes")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  deletedAt        DateTime? @map("deleted_at")
+
+  issue      Issue @relation(fields: [issueId], references: [id], onDelete: Restrict)
+  uploadedBy User  @relation("IssueAttachmentUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([issueId, deletedAt, createdAt])
+  @@map("issue_attachments")
 }

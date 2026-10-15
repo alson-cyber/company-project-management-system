@@ -19,11 +19,29 @@ export const ACTIVITY_ACTIONS = [
   "issue.criterion_removed",
   "issue.criterion_met",
   "issue.criterion_unmet",
+  "issue.criterion_reordered",
+  "issue.criterion_restored",
+  "issue.note_added",
+  "issue.note_updated",
+  "issue.note_removed",
+  "issue.comment_added",
+  "issue.comment_updated",
+  "issue.comment_removed",
+  "issue.attachment_added",
+  "issue.attachment_removed",
 ] as const;
 
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];
 
-export const ACTIVITY_ENTITY_TYPES = ["project", "project_member", "issue", "acceptance_criterion"] as const;
+export const ACTIVITY_ENTITY_TYPES = [
+  "project",
+  "project_member",
+  "issue",
+  "acceptance_criterion",
+  "issue_note",
+  "issue_comment",
+  "issue_attachment",
+] as const;
 
 export type ActivityEntityType = (typeof ACTIVITY_ENTITY_TYPES)[number];
 
