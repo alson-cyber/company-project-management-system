@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+/* Design tokens carried over from prototype/styles.css (:root). */
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  --color-canvas: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-surface-2: #fbfcfd;
+  --color-surface-3: #f0f3f7;
+  --color-ink: #172033;
+  --color-muted: #646d84;
+  --color-muted-2: #8e97a9;
+  --color-line: #e5e9f0;
+  --color-line-strong: #d7dce5;
+
+  --color-accent: #4f6cf7;
+  --color-accent-strong: #3c56db;
+  --color-accent-soft: #edf1ff;
+
+  --color-nav: #101827;
+  --color-nav-2: #172236;
+  --color-nav-active: #24324b;
+  --color-nav-text: #c4cddd;
+  --color-nav-muted: #7d8aa0;
+
+  --color-success: #1a8a5c;
+  --color-success-soft: #e7f7f0;
+  --color-warning: #a8690f;
+  --color-warning-soft: #fff5df;
+  --color-danger: #c93a4d;
+  --color-danger-soft: #ffecef;
+  --color-purple: #7444e6;
+  --color-purple-soft: #f2ebff;
+  --color-teal: #11907c;
+  --color-teal-soft: #e4f7f3;
+
+  --shadow-card: 0 1px 2px rgba(21, 28, 45, 0.04), 0 6px 18px rgba(21, 28, 45, 0.03);
+  --shadow-pop: 0 14px 40px rgba(21, 28, 45, 0.12);
+
+  --radius-card: 12px;
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+  body {
+    @apply bg-canvas text-ink font-sans antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+  :focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--color-accent) 55%, transparent);
+    outline-offset: 2px;
+  }
+}

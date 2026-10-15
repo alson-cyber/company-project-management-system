@@ -1,8 +1,12 @@
 # Product Definition
 
+> **Source of truth:** [`PRODUCT-RULES.md`](PRODUCT-RULES.md). If this file disagrees with it, `PRODUCT-RULES.md` wins.
+>
+> **Future / Optional — Not Current Scope:** Direct AI-agent execution through the PMS is excluded from the current product. Do not implement agent orchestration, runners, queues or agent identities.
+
 ## Goal
 
-Build an internal project-management system for a software company where developers manage projects and much of the implementation work may eventually be performed by AI agents.
+Build an internal project-management system for a software company. Developers manage projects through a strict work hierarchy. Direct AI-agent execution is a possible later consideration; it is not part of the current system.
 
 The product should provide the useful structural power of Jira without inheriting Jira's complexity.
 
