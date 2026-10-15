@@ -92,11 +92,13 @@ Future company SSO is plugged in by setting all `AUTH_OIDC_*` variables (any Ope
 ```bash
 pnpm test:unit
 pnpm test:integration   # requires `pnpm db:up`
-pnpm test:e2e           # requires a seeded database and the app
+pnpm test:e2e           # Playwright on port 3100, using pms_test only
 pnpm lint
 pnpm typecheck
 pnpm build
 ```
+
+End-to-end tests start their own app on port 3100 and point that process at `TEST_DATABASE_URL` (`pms_test`). They reset and re-seed that database before the run. They do not write to `pms_dev`. The run fails if an issue titled `E2E …` is found in the development database afterward.
 
 ## Prototype (visual reference)
 
