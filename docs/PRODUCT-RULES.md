@@ -156,6 +156,38 @@ Minimum events:
 
 `completed` is recorded whenever status moves into `Done` (in addition to the status change), and `reopened` whenever it moves out of `Done`.
 
+### 5.1 Activity is not Inbox
+
+- **Activity** is the append-only record of what happened. Marking something read never updates or deletes an activity event.
+- **Inbox / notifications** are personal attention for one recipient: unread and read state, with a stable historical notice even if the issue later changes.
+- Notifications are created on the server, in the same transaction as the change when the change itself is the reason (assignment, comment, note, status, membership). Due soon and overdue notices are materialised from issue dates when a personal surface loads. The same recipient, type and dedupe key is inserted once.
+- A person is not notified about their own action. Assigning an issue to the person who already holds it does not create another assignment notice.
+- In-app only. Email, push, Slack and Teams are out of scope.
+- Direct AI-agent execution remains **Future / Optional — Not Current Scope** (§8).
+
+### 5.2 Personal attention rules
+
+These rules are shared by My Work, Inbox and the Dashboard. They are not stored as a second status.
+
+| Rule | Definition |
+|---|---|
+| Overdue | Due date is before today in `COMPANY_TIMEZONE`, status is not Done, issue is not archived. Priority is irrelevant (§1.3). |
+| Due soon | Open, not archived, due date is today or at most 7 calendar days later in `COMPANY_TIMEZONE`. Overdue work is not also due soon. |
+| Completed recently | `completedById` is the viewer and `completedAt` falls within the last 14 calendar days, inclusive. The current assignee is irrelevant. |
+| Recently updated | Open work assigned to the viewer whose `updatedAt` falls within the last 14 calendar days. |
+
+Project Overview's "due in the next 14 days" list is a project planning horizon. It is not the personal due-soon rule.
+
+Inbox relevance, and only these:
+
+- assigned to me
+- comment or note on an issue currently assigned to me
+- status change on work already assigned to me (a brand-new assignment does not also emit a status notice)
+- due soon or overdue on work assigned to me
+- I was added to a project or made its lead
+
+Priority edits, description edits, labels, criteria, attachments and health changes do not create inbox items.
+
 ## 6. Contribution-reporting principles
 
 Contribution reporting shows **factual evidence of work**. It is not a performance evaluation.
@@ -188,9 +220,10 @@ Key distinctions:
 - A person who needs both must be granted both explicitly. Every grant and revocation is audited.
 - Role is never inferred from an email address or job title. Job title (Engineer, Designer, QA Engineer…) is a display field with no permission meaning.
 - Hiding a control in the UI is not authorization. Every read of protected data and every mutation is checked on the server.
+- Global search uses the same project visibility: members see their projects, Executives see company project content, Admins do not gain project content by being Admins. User email is returned only to Admins. My Work and Inbox are limited to the signed-in user and to projects they may view.
 - Executive exports of activity or contribution data are themselves recorded as audit events.
 
-Landing after sign-in: Executive → Executive overview; Project Lead or Member → My Work (or the last-used project); Admin-only → Admin settings.
+Landing after sign-in: Executive → Executive overview; Admin with no project memberships → Admin settings; everyone else → My Work.
 
 ## 8. Scope exclusion: direct AI execution
 

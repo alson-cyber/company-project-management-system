@@ -2,6 +2,7 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import type { IssuePriority, IssueStatus, IssueType } from "@/generated/prisma/enums";
 import { recordActivity } from "@/modules/activity/activity.service";
+import { notifyIssueUpdate } from "@/modules/attention/notify";
 import type { ActivityAction, JsonObject } from "@/modules/activity/activity.types";
 import { LABEL_COLORS } from "@/modules/issues/issue.constants";
 import { issueKey } from "@/modules/issues/issue.keys";
@@ -188,8 +189,8 @@ async function writeIssueActivity(
     after?: JsonObject;
     metadata?: JsonObject;
   },
-) {
-  await recordActivity(tx, {
+): Promise<string> {
+  return recordActivity(tx, {
     workspaceId: ctx.workspace.id,
     actor: actorOf(ctx),
     action: input.action,
@@ -316,7 +317,15 @@ export async function createIssue(ctx: AuthContext, rawInput: unknown): Promise<
     if (input.labels?.length) after.labels = input.labels;
     if (input.acceptanceCriteria?.length) after.acceptanceCriteria = input.acceptanceCriteria;
 
-    await writeIssueActivity(tx, ctx, { action: "issue.created", issue: created, projectKey: project.key, after });
+    const activityId = await writeIssueActivity(tx, ctx, { action: "issue.created", issue: created, projectKey: project.key, after });
+    await notifyIssueUpdate(tx, {
+      actorId: ctx.userId,
+      projectId: created.projectId,
+      issueId: created.id,
+      activityId,
+      previousAssigneeId: null,
+      assigneeId: created.assigneeId,
+    });
     await recordCompletionTransition(tx, ctx, created, "TO_DO", status, project.key);
 
     return { id: created.id, key: issueKey(project.key, created.number), number: created.number, projectKey: project.key };
@@ -424,12 +433,33 @@ export async function updateIssue(ctx: AuthContext, rawInput: unknown): Promise<
       changed.after.assigneeName = await userName(tx, afterId);
     }
 
-    await writeIssueActivity(tx, ctx, {
+    const activityId = await writeIssueActivity(tx, ctx, {
       action: "issue.updated",
       issue: updated,
       projectKey: issue.project.key,
       before: changed.before,
       after: changed.after,
+    });
+    const assigneeChanged = Object.prototype.hasOwnProperty.call(changed.before, "assigneeId");
+    const statusChanged = Object.prototype.hasOwnProperty.call(changed.before, "status");
+    const previousAssigneeId = assigneeChanged
+      ? typeof changed.before.assigneeId === "string"
+        ? changed.before.assigneeId
+        : null
+      : updated.assigneeId;
+    await notifyIssueUpdate(tx, {
+      actorId: ctx.userId,
+      projectId: updated.projectId,
+      issueId: updated.id,
+      activityId,
+      previousAssigneeId,
+      assigneeId: updated.assigneeId,
+      ...(statusChanged
+        ? {
+            previousStatus: issue.status,
+            status: updated.status,
+          }
+        : {}),
     });
     await recordCompletionTransition(tx, ctx, updated, issue.status, updated.status, issue.project.key);
     return { changed: true, key: issueKey(issue.project.key, updated.number) };

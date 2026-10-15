@@ -6,6 +6,8 @@ export interface NavItem {
   icon: IconName;
   /** Shown as a quiet "Soon" tag: the page exists but its feature is not built yet. */
   upcoming?: boolean;
+  /** Unread count. Zero is omitted. */
+  badge?: number;
 }
 
 export interface NavProject {
@@ -25,12 +27,14 @@ export function buildNavigation(options: {
   canViewExecutive: boolean;
   canAdminister: boolean;
   projects: NavProject[];
+  unreadCount?: number;
 }): ShellNavigation {
+  const unread = options.unreadCount ?? 0;
   const primary: NavItem[] = [
     { href: "/", label: "Dashboard", icon: "dashboard" },
     { href: "/projects", label: "Projects", icon: "projects" },
-    { href: "/my-work", label: "My Work", icon: "work", upcoming: true },
-    { href: "/inbox", label: "Inbox", icon: "inbox", upcoming: true },
+    { href: "/my-work", label: "My Work", icon: "work" },
+    { href: "/inbox", label: "Inbox", icon: "inbox", ...(unread > 0 ? { badge: unread } : {}) },
     { href: "/team", label: "Team", icon: "team" },
     { href: "/reports", label: "Reports", icon: "reports", upcoming: true },
   ];

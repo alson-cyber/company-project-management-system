@@ -13,5 +13,5 @@ export async function GET(request: NextRequest) {
   const { ctx } = state;
   if (hasWorkspacePermission(ctx, "executive.view")) return to("/executive");
   if (hasWorkspacePermission(ctx, "admin.access") && ctx.projectRoles.size === 0) return to("/admin");
-  return to("/");
+  return to("/my-work");
 }

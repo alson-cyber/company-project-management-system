@@ -1,6 +1,9 @@
 import type { IssuePriority, IssueStatus, IssueType, ProjectStatus } from "@/generated/prisma/enums";
+import { addCalendarDays } from "@/lib/calendar";
 import { ISSUE_STATUSES } from "@/modules/issues/issue.constants";
 import { progressOfProject, type Progress, type ProgressIssue } from "@/modules/issues/issue.progress";
+
+export { addCalendarDays };
 
 /**
  * One non-archived issue, already scoped to a single project.
@@ -196,14 +199,8 @@ export interface OverviewSignals {
 }
 
 const TYPE_ORDER: IssueType[] = ["EPIC", "USER_STORY", "TASK", "SUB_TASK"];
-const DUE_SOON_DAYS = 14;
-
-export function addCalendarDays(day: string, days: number): string {
-  const [year, month, date] = day.split("-").map(Number);
-  const utc = new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, date ?? 1));
-  utc.setUTCDate(utc.getUTCDate() + days);
-  return utc.toISOString().slice(0, 10);
-}
+/** Project planning horizon. Personal Due Soon is PERSONAL_DUE_SOON_DAYS in src/lib/calendar.ts. */
+const PROJECT_DUE_HORIZON_DAYS = 14;
 
 function toAttention(issue: WorkspaceIssue): AttentionItem {
   return {
@@ -233,7 +230,7 @@ export function overviewSignals(
   options: { today: string; targetDate: string | null; projectStatus: ProjectStatus },
 ): OverviewSignals {
   const open = (issue: WorkspaceIssue) => issue.status !== "DONE";
-  const soonLimit = addCalendarDays(options.today, DUE_SOON_DAYS);
+  const soonLimit = addCalendarDays(options.today, PROJECT_DUE_HORIZON_DAYS);
   const highPriorityOpen = issues
     .filter((issue) => open(issue) && (issue.priority === "HIGH" || issue.priority === "HIGHEST"))
     .map(toAttention);

@@ -1,6 +1,7 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { recordActivity } from "@/modules/activity/activity.service";
+import { notifyDiscussion } from "@/modules/attention/notify";
 import type { AuthContext } from "@/server/access/types";
 import { assertProjectPermission, hasProjectPermission } from "@/server/access/policy";
 import { getAttachmentPolicy, isWithinAttachmentLimit } from "@/server/config";
@@ -122,6 +123,16 @@ export async function addNote(ctx: AuthContext, rawInput: unknown): Promise<{ id
       issue,
       after: { excerpt: excerpt(note.content) },
     });
+    const assignee = await tx.issue.findFirst({ where: { id: issue.id }, select: { assigneeId: true } });
+    await notifyDiscussion(tx, {
+      actorId: ctx.userId,
+      projectId: issue.projectId,
+      issueId: issue.id,
+      assigneeId: assignee?.assigneeId ?? null,
+      kind: "note",
+      entityId: note.id,
+      excerpt: excerpt(note.content),
+    });
     return { id: note.id };
   });
 }
@@ -195,6 +206,16 @@ export async function addComment(ctx: AuthContext, rawInput: unknown): Promise<{
       entityId: comment.id,
       issue,
       after: { excerpt: excerpt(comment.body) },
+    });
+    const assignee = await tx.issue.findFirst({ where: { id: issue.id }, select: { assigneeId: true } });
+    await notifyDiscussion(tx, {
+      actorId: ctx.userId,
+      projectId: issue.projectId,
+      issueId: issue.id,
+      assigneeId: assignee?.assigneeId ?? null,
+      kind: "comment",
+      entityId: comment.id,
+      excerpt: excerpt(comment.body),
     });
     return { id: comment.id };
   });

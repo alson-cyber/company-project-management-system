@@ -2,6 +2,7 @@ import "server-only";
 import { Prisma } from "@/generated/prisma/client";
 import type { ProjectHealth } from "@/generated/prisma/enums";
 import { recordActivity } from "@/modules/activity/activity.service";
+import { notifyMembership } from "@/modules/attention/notify";
 import { PROJECT_COLORS } from "@/modules/projects/project.constants";
 import { createProjectSchema, setProjectHealthSchema, updateProjectSchema } from "@/modules/projects/project.schema";
 import { calendarDayUtc } from "@/lib/calendar";
@@ -57,7 +58,7 @@ export async function createProject(ctx: AuthContext, rawInput: unknown): Promis
         projectId: project.id,
         after: { key: project.key, name: project.name, status: project.status },
       });
-      await recordActivity(tx, {
+      const membershipActivityId = await recordActivity(tx, {
         workspaceId: ctx.workspace.id,
         actor,
         action: "project.member_added",
@@ -65,6 +66,13 @@ export async function createProject(ctx: AuthContext, rawInput: unknown): Promis
         entityId: `${project.id}:${lead.userId}`,
         projectId: project.id,
         after: { userId: lead.userId, role: "LEAD" },
+      });
+      await notifyMembership(tx, {
+        actorId: ctx.userId,
+        projectId: project.id,
+        userId: lead.userId,
+        role: "LEAD",
+        activityId: membershipActivityId,
       });
 
       return { id: project.id, key: project.key };
