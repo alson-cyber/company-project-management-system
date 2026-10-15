@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ISSUE_PRIORITIES, ISSUE_STATUSES, ISSUE_TYPES } from "@/modules/issues/issue.constants";
+import { plannedRangeError } from "@/modules/projects/workspace.model";
 
 const optionalText = (max: number) =>
   z
@@ -39,6 +40,15 @@ const nullableCalendarDate = z.union([z.iso.date("Use a valid date."), z.literal
   value ? value : null,
 );
 
+const optionalNullableCalendarDate = z
+  .union([z.iso.date("Use a valid date."), z.literal(""), z.null()])
+  .optional()
+  .transform((value) => {
+    if (value === undefined) return undefined;
+    if (value === "" || value === null) return null;
+    return value;
+  });
+
 const optionalUuid = emptyToUndefined.pipe(z.uuid("Unknown user.").optional());
 
 export const createIssueSchema = z
@@ -53,6 +63,7 @@ export const createIssueSchema = z
     assigneeId: optionalUuid,
     reporterId: optionalUuid,
     dueDate: optionalCalendarDate,
+    plannedStartDate: optionalCalendarDate,
     labels: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
     story: storyFieldsSchema.optional(),
     acceptanceCriteria: z.array(criterionTextSchema).max(40).optional(),
@@ -81,6 +92,8 @@ export const createIssueSchema = z
         message: "Acceptance criteria belong on User Stories.",
       });
     }
+    const range = plannedRangeError(input.plannedStartDate, input.dueDate);
+    if (range) ctx.addIssue({ code: "custom", path: ["plannedStartDate"], message: range });
   });
 
 export type CreateIssueInput = z.infer<typeof createIssueSchema>;
@@ -101,14 +114,8 @@ export const updateIssueSchema = z.object({
     .optional()
     .transform((value) => (value === undefined ? undefined : value === "" || value === null ? null : value)),
   reporterId: z.uuid("Unknown user.").optional(),
-  dueDate: z
-    .union([z.iso.date("Use a valid date."), z.literal(""), z.null()])
-    .optional()
-    .transform((value) => {
-      if (value === undefined) return undefined;
-      if (value === "" || value === null) return null;
-      return value;
-    }),
+  dueDate: optionalNullableCalendarDate,
+  plannedStartDate: optionalNullableCalendarDate,
   parentId: z.uuid("Unknown parent.").optional(),
   type: z.enum(ISSUE_TYPES).optional(),
 });

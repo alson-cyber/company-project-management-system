@@ -24,6 +24,7 @@ import {
   updateIssueSchema,
 } from "@/modules/issues/issue.schema";
 import { calendarDayUtc, parseCalendarDate } from "@/lib/calendar";
+import { plannedRangeError } from "@/modules/projects/workspace.model";
 import { prisma } from "@/server/db";
 import { ConflictError, NotFoundError, ValidationError, parseInput } from "@/server/errors";
 import { assertProjectPermission, hasProjectPermission } from "@/server/access/policy";
@@ -45,6 +46,7 @@ const issueWriteSelect = {
   reporterId: true,
   createdById: true,
   dueDate: true,
+  plannedStartDate: true,
   completedAt: true,
   completedById: true,
   archivedAt: true,
@@ -67,6 +69,7 @@ function fieldSnapshot(issue: IssueRow): JsonObject {
     assigneeId: issue.assigneeId,
     reporterId: issue.reporterId,
     dueDate: issue.dueDate ? calendarDayUtc(issue.dueDate) : null,
+    plannedStartDate: issue.plannedStartDate ? calendarDayUtc(issue.plannedStartDate) : null,
   };
 }
 
@@ -256,6 +259,9 @@ export async function createIssue(ctx: AuthContext, rawInput: unknown): Promise<
       if (storyError) throw new ValidationError(storyError);
     }
 
+    const rangeError = plannedRangeError(input.plannedStartDate, input.dueDate);
+    if (rangeError) throw new ValidationError(rangeError, { plannedStartDate: [rangeError] });
+
     const number = await allocateIssueNumber(tx, project.id);
     const rank = await nextRank(tx, project.id, parent?.id ?? null);
     const status: IssueStatus = input.status ?? "TO_DO";
@@ -275,6 +281,7 @@ export async function createIssue(ctx: AuthContext, rawInput: unknown): Promise<
         reporterId,
         createdById: ctx.userId,
         dueDate: input.dueDate ? parseCalendarDate(input.dueDate) : null,
+        plannedStartDate: input.plannedStartDate ? parseCalendarDate(input.plannedStartDate) : null,
         rank,
         completedAt: status === "DONE" ? now : null,
         completedById: status === "DONE" ? ctx.userId : null,
@@ -373,7 +380,22 @@ export async function updateIssue(ctx: AuthContext, rawInput: unknown): Promise<
     if (input.priority !== undefined) data.priority = input.priority;
     if (input.assigneeId !== undefined) data.assigneeId = input.assigneeId;
     if (input.reporterId !== undefined) data.reporterId = input.reporterId;
+    if (input.dueDate !== undefined || input.plannedStartDate !== undefined) {
+      const nextStart =
+        input.plannedStartDate !== undefined
+          ? input.plannedStartDate
+          : issue.plannedStartDate
+            ? calendarDayUtc(issue.plannedStartDate)
+            : null;
+      const nextDue = input.dueDate !== undefined ? input.dueDate : issue.dueDate ? calendarDayUtc(issue.dueDate) : null;
+      const rangeError = plannedRangeError(nextStart, nextDue);
+      if (rangeError) throw new ValidationError(rangeError, { plannedStartDate: [rangeError], dueDate: [rangeError] });
+    }
+
     if (input.dueDate !== undefined) data.dueDate = input.dueDate ? parseCalendarDate(input.dueDate) : null;
+    if (input.plannedStartDate !== undefined) {
+      data.plannedStartDate = input.plannedStartDate ? parseCalendarDate(input.plannedStartDate) : null;
+    }
     if (input.parentId !== undefined) {
       data.parentId = input.parentId;
       data.rank = await nextRank(tx, issue.projectId, input.parentId);

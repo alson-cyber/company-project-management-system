@@ -3,7 +3,8 @@ import { Prisma } from "@/generated/prisma/client";
 import type { ProjectHealth } from "@/generated/prisma/enums";
 import { recordActivity } from "@/modules/activity/activity.service";
 import { PROJECT_COLORS } from "@/modules/projects/project.constants";
-import { createProjectSchema, setProjectHealthSchema } from "@/modules/projects/project.schema";
+import { createProjectSchema, setProjectHealthSchema, updateProjectSchema } from "@/modules/projects/project.schema";
+import { calendarDayUtc } from "@/lib/calendar";
 import { prisma } from "@/server/db";
 import { ConflictError, NotFoundError, ValidationError, parseInput } from "@/server/errors";
 import { assertProjectPermission, assertWorkspacePermission } from "@/server/access/policy";
@@ -113,4 +114,63 @@ export async function setProjectHealth(
   });
 
   return { changed: true, health: input.health };
+}
+
+/**
+ * Updates project basics. The key is not accepted: once issues exist, `KEY-number`
+ * is a stable reference and is not rewritten here.
+ */
+export async function updateProject(ctx: AuthContext, rawInput: unknown): Promise<{ changed: boolean; key: string }> {
+  const input = parseInput(updateProjectSchema, rawInput);
+  const project = await prisma.project.findFirst({
+    where: { id: input.projectId, workspaceId: ctx.workspace.id, archivedAt: null },
+    select: { id: true, key: true, name: true, description: true, status: true, targetDate: true },
+  });
+  if (!project) throw new NotFoundError("Project not found.");
+  assertProjectPermission(ctx, "project.manage", project.id);
+
+  const before = {
+    name: project.name,
+    description: project.description,
+    status: project.status,
+    targetDate: project.targetDate ? calendarDayUtc(project.targetDate) : null,
+  };
+  const after = {
+    name: input.name,
+    description: input.description,
+    status: input.status,
+    targetDate: input.targetDate ? calendarDayUtc(input.targetDate) : null,
+  };
+  const changedBefore: Record<string, string | null> = {};
+  const changedAfter: Record<string, string | null> = {};
+  for (const key of ["name", "description", "status", "targetDate"] as const) {
+    if (before[key] === after[key]) continue;
+    changedBefore[key] = before[key];
+    changedAfter[key] = after[key];
+  }
+  if (Object.keys(changedAfter).length === 0) return { changed: false, key: project.key };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.project.update({
+      where: { id: project.id },
+      data: {
+        name: input.name,
+        description: input.description,
+        status: input.status,
+        targetDate: input.targetDate,
+      },
+    });
+    await recordActivity(tx, {
+      workspaceId: ctx.workspace.id,
+      actor: { type: "USER", userId: ctx.userId },
+      action: "project.updated",
+      entityType: "project",
+      entityId: project.id,
+      projectId: project.id,
+      before: changedBefore,
+      after: changedAfter,
+    });
+  });
+
+  return { changed: true, key: project.key };
 }
