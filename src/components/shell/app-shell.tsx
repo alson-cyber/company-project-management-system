@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import { BrandMark } from "@/components/brand";
+import { InboxBell, type BellItem } from "@/components/shell/inbox-bell";
 import { MobileNav } from "@/components/shell/mobile-nav";
 import type { ShellNavigation } from "@/components/shell/navigation";
+import { SearchDialog } from "@/components/shell/search-dialog";
 import { SidebarNav } from "@/components/shell/sidebar-nav";
 import { UserMenu } from "@/components/shell/user-menu";
 
@@ -9,11 +11,15 @@ export function AppShell({
   navigation,
   workspaceName,
   user,
+  unreadCount,
+  recentInbox,
   children,
 }: {
   navigation: ShellNavigation;
   workspaceName: string;
   user: { name: string; email: string; roles: string[] };
+  unreadCount: number;
+  recentInbox: BellItem[];
   children: ReactNode;
 }) {
   return (
@@ -39,7 +45,9 @@ export function AppShell({
       <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-surface/90 px-4 backdrop-blur-md sm:px-6">
         <MobileNav navigation={navigation} workspaceName={workspaceName} />
         <p className="truncate text-[13px] text-muted lg:hidden">Workhub</p>
-        <div className="ml-auto">
+        <SearchDialog />
+        <div className="ml-auto flex items-center gap-2">
+          <InboxBell count={unreadCount} items={recentInbox} />
           <UserMenu name={user.name} email={user.email} roles={user.roles} />
         </div>
       </header>

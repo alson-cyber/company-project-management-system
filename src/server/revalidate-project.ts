@@ -9,5 +9,8 @@ export function revalidateProjectWorkspace(projectKey: string, issueNumber?: str
   revalidatePath(`/projects/${projectKey}/files`);
   revalidatePath(`/projects/${projectKey}/team`);
   revalidatePath(`/projects/${projectKey}/activity`);
+  revalidatePath("/my-work");
+  revalidatePath("/inbox");
+  revalidatePath("/");
   if (issueNumber !== undefined) revalidatePath(`/projects/${projectKey}/issues/${issueNumber}`);
 }

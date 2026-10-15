@@ -22,6 +22,12 @@ function NavLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => void 
     >
       <Icon name={item.icon} className="size-[17px] opacity-90" />
       <span className="flex-1 truncate">{item.label}</span>
+      {item.badge ? (
+        <span className="min-w-5 rounded-full bg-white/15 px-1.5 text-center text-[11px] font-semibold tabular-nums text-white">
+          {item.badge > 99 ? "99+" : item.badge}
+          <span className="sr-only"> unread</span>
+        </span>
+      ) : null}
       {item.upcoming ? (
         <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-nav-muted ring-1 ring-white/10">
           Soon

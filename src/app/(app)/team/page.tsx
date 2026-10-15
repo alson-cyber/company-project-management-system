@@ -16,7 +16,7 @@ export default async function TeamPage() {
     <>
       <PageHeader
         title="Team"
-        description="People in this workspace. Contribution evidence arrives with the issue hierarchy; there are no scores or rankings."
+        description="People in this workspace. Project links are limited to projects you can see. There are no scores or rankings."
       />
       <Card>
         <CardHeader title="People" description={`${people.length} active members. Projects are shown where you can see them.`} />
@@ -26,7 +26,9 @@ export default async function TeamPage() {
               <div className="flex min-w-0 flex-1 items-center gap-3">
                 <Avatar name={person.name} />
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{person.name}</p>
+                  <Link href={`/team/${person.id}`} className="truncate text-sm font-medium hover:underline">
+                    {person.name}
+                  </Link>
                   <p className="truncate text-[13px] text-muted">{person.jobTitle ?? "—"}</p>
                 </div>
               </div>

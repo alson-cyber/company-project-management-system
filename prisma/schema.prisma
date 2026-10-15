@@ -47,6 +47,17 @@ enum ActorType {
   SYSTEM
 }
 
+/// Personal attention. This is not activity: read state lives here and never rewrites the audit log.
+enum NotificationType {
+  ISSUE_ASSIGNED
+  ISSUE_COMMENTED
+  ISSUE_NOTE_ADDED
+  ISSUE_STATUS_CHANGED
+  ISSUE_DUE_SOON
+  ISSUE_OVERDUE
+  PROJECT_MEMBERSHIP
+}
+
 enum IssueType {
   EPIC
   USER_STORY
@@ -103,6 +114,8 @@ model User {
   notesAuthored        IssueNote[]           @relation("IssueNoteAuthor")
   commentsAuthored     IssueComment[]        @relation("IssueCommentAuthor")
   attachmentsUploaded  IssueAttachment[]     @relation("IssueAttachmentUploader")
+  notificationsReceived Notification[]       @relation("NotificationRecipient")
+  notificationsActed    Notification[]       @relation("NotificationActor")
 
   @@map("users")
 }
@@ -235,6 +248,7 @@ model Project {
   activityEvents  ActivityEvent[]
   issues          Issue[]
   labels          Label[]
+  notifications   Notification[]
 
   @@unique([workspaceId, key])
   @@index([workspaceId, archivedAt])
@@ -330,9 +344,10 @@ model Issue {
   criteria    AcceptanceCriterion[]
   labels      IssueLabel[]
   activity    ActivityEvent[]
-  notes       IssueNote[]
-  comments    IssueComment[]
-  attachments IssueAttachment[]
+  notes         IssueNote[]
+  comments      IssueComment[]
+  attachments   IssueAttachment[]
+  notifications Notification[]
 
   @@unique([projectId, number])
   @@index([projectId, parentId])
@@ -453,4 +468,27 @@ model IssueAttachment {
 
   @@index([issueId, deletedAt, createdAt])
   @@map("issue_attachments")
+}
+
+/// User-specific attention. Activity remains the system of record for what happened.
+model Notification {
+  id          String           @id @default(uuid())
+  recipientId String           @map("recipient_id")
+  actorId     String?          @map("actor_id")
+  projectId   String?          @map("project_id")
+  issueId     String?          @map("issue_id")
+  type        NotificationType
+  dedupeKey   String           @map("dedupe_key")
+  metadata    Json?
+  readAt      DateTime?        @map("read_at")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  recipient User     @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Restrict)
+  actor     User?    @relation("NotificationActor", fields: [actorId], references: [id], onDelete: Restrict)
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  issue     Issue?   @relation(fields: [issueId], references: [id], onDelete: Restrict)
+
+  @@unique([recipientId, dedupeKey])
+  @@index([recipientId, readAt, createdAt(sort: Desc)])
+  @@map("notifications")
 }

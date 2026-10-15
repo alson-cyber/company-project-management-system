@@ -2,7 +2,7 @@ import "server-only";
 import type { ProjectRole, UserStatus, WorkspaceRole } from "@/generated/prisma/enums";
 import { visibleProjectsWhere } from "@/modules/projects/project.queries";
 import { prisma } from "@/server/db";
-import { assertWorkspacePermission } from "@/server/access/policy";
+import { assertWorkspacePermission, hasWorkspacePermission } from "@/server/access/policy";
 import type { AuthContext } from "@/server/access/types";
 
 export interface PersonView {
@@ -81,6 +81,36 @@ export async function listUsersForAdmin(ctx: AuthContext): Promise<AdminUserRow[
     workspaceRoles: user.roleGrants.map((grant) => grant.role).sort(),
     projectCount: user._count.projectMemberships,
   }));
+}
+
+export async function getWorkspacePerson(ctx: AuthContext, userId: string): Promise<PersonView & { email: string | null } | null> {
+  const member = await prisma.workspaceMember.findFirst({
+    where: { workspaceId: ctx.workspace.id, userId },
+    select: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          jobTitle: true,
+          projectMemberships: {
+            where: { project: visibleProjectsWhere(ctx) },
+            select: { role: true, project: { select: { key: true, name: true, color: true } } },
+            orderBy: { project: { name: "asc" } },
+          },
+        },
+      },
+    },
+  });
+  if (!member) return null;
+  const showEmail = hasWorkspacePermission(ctx, "admin.access");
+  return {
+    id: member.user.id,
+    name: member.user.name,
+    jobTitle: member.user.jobTitle,
+    email: showEmail ? member.user.email : null,
+    projects: member.user.projectMemberships.map((membership) => ({ ...membership.project, role: membership.role })),
+  };
 }
 
 /** Active workspace members who can be chosen as a project lead. */

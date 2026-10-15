@@ -19,8 +19,8 @@ export interface RecordActivityInput {
  * audit record commit or roll back together. This is the only writer of activity_events;
  * there is deliberately no update or delete counterpart (the table also rejects them).
  */
-export async function recordActivity(tx: Prisma.TransactionClient, input: RecordActivityInput): Promise<void> {
-  await tx.activityEvent.create({
+export async function recordActivity(tx: Prisma.TransactionClient, input: RecordActivityInput): Promise<string> {
+  const event = await tx.activityEvent.create({
     data: {
       workspaceId: input.workspaceId,
       actorType: input.actor.type,
@@ -34,5 +34,7 @@ export async function recordActivity(tx: Prisma.TransactionClient, input: Record
       ...(input.after ? { after: input.after } : {}),
       ...(input.metadata ? { metadata: input.metadata } : {}),
     },
+    select: { id: true },
   });
+  return event.id;
 }

@@ -3,6 +3,8 @@
 > **Current production stack** is Next.js App Router, PostgreSQL, Prisma and Better Auth. Details: [`ARCHITECTURE-PLAN.md`](ARCHITECTURE-PLAN.md) and [`ISSUE-DOMAIN.md`](ISSUE-DOMAIN.md). `PRODUCT-RULES.md` wins if this file disagrees.
 >
 > The Checkpoint 0.5 prototype remains in `prototype/` as a visual reference. Direct AI-agent execution is **Future / Optional — Not Current Scope**.
+>
+> My Work, Inbox and search are personal surfaces over the same issues. Inbox rows are notifications with read state. Activity remains the append-only history and is never updated when a notification is marked read. In-app only: no email or push. Rules: `PRODUCT-RULES.md` §5.1–§5.2.
 
 ## Historical checkpoint (prototype)
 
