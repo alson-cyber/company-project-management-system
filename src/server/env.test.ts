@@ -25,4 +25,9 @@ describe("parseEnv", () => {
   test("requires S3 credentials when the S3 driver is selected", () => {
     expect(() => parseEnv({ ...base, STORAGE_DRIVER: "s3" })).toThrow(/S3_BUCKET/);
   });
+
+  test("defaults company time zone to UTC and rejects an invalid IANA zone", () => {
+    expect(parseEnv(base).COMPANY_TIMEZONE).toBe("UTC");
+    expect(() => parseEnv({ ...base, COMPANY_TIMEZONE: "Maldives/NotAZone" })).toThrow(/IANA/);
+  });
 });

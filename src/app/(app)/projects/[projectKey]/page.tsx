@@ -1,19 +1,18 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { ProjectIdentity } from "@/components/projects/project-table";
+import { ProjectWorkspaceHeader } from "@/components/projects/project-workspace-header";
 import { Avatar } from "@/components/ui/avatar";
-import { ProjectHealthBadge, ProjectRoleBadge, ProjectStatusBadge } from "@/components/ui/badge";
+import { ProjectHealthBadge, ProjectRoleBadge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatDate, formatDateTime } from "@/components/ui/format";
 import { describeActivity } from "@/modules/activity/activity.format";
 import { listProjectActivity } from "@/modules/activity/activity.queries";
+import { listProjectIssueTree } from "@/modules/issues/issue.queries";
 import { getVisibleProjectByKey } from "@/modules/projects/project.queries";
 import { hasProjectPermission } from "@/server/access/policy";
 import { requireAuthContext } from "@/server/access/session";
 import { HealthForm } from "./health-form";
-
-const UPCOMING_TABS = ["Issues", "Board", "Timeline", "Files"] as const;
 
 export async function generateMetadata({
   params,
@@ -40,42 +39,12 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
   if (!project) notFound();
 
   const activity = await listProjectActivity(ctx, project.id, 15);
+  const { progress } = await listProjectIssueTree(ctx, project.id);
   const canSetHealth = hasProjectPermission(ctx, "project.health.set", project.id);
 
   return (
     <>
-      <div className="mb-6 rounded-[var(--radius-card)] border border-line bg-surface shadow-card">
-        <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <h1 className="sr-only">{project.name}</h1>
-            <ProjectIdentity project={project} />
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <ProjectStatusBadge status={project.status} />
-            <ProjectHealthBadge health={project.health} />
-            <ProjectRoleBadge role={project.viewerRole} />
-          </div>
-        </div>
-        <nav aria-label="Project sections" className="flex gap-1 overflow-x-auto border-t border-line px-3">
-          <span
-            aria-current="page"
-            className="border-b-2 border-accent px-3 py-2.5 text-[13px] font-semibold text-accent-strong"
-          >
-            Overview
-          </span>
-          {UPCOMING_TABS.map((tab) => (
-            <span
-              key={tab}
-              aria-disabled="true"
-              title="Available when the issue hierarchy is enabled"
-              className="flex cursor-not-allowed items-center gap-1.5 border-b-2 border-transparent px-3 py-2.5 text-[13px] text-muted-2"
-            >
-              {tab}
-              <span className="text-[10px] font-semibold uppercase tracking-wide">Soon</span>
-            </span>
-          ))}
-        </nav>
-      </div>
+      <ProjectWorkspaceHeader project={project} current="overview" />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="grid content-start gap-6">
@@ -91,6 +60,14 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
                 <Detail label="Created">{formatDate(project.createdAt)}</Detail>
                 <Detail label="Description">
                   <span className="text-muted">{project.description ?? "No description."}</span>
+                </Detail>
+                <Detail label="Progress">
+                  <span className="tabular-nums">
+                    {progress.percent}%{" "}
+                    <span className="text-muted">
+                      ({progress.done}/{progress.total} executable items done)
+                    </span>
+                  </span>
                 </Detail>
               </dl>
             </CardBody>

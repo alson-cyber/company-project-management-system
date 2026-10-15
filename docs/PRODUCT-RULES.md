@@ -59,9 +59,21 @@ Any future exception to these rules (for example, a Task directly under an Epic)
 
 ### 1.4 Progress and health
 
-- Progress is **derived**, never typed in. For a parent issue it is the share of its non-archived descendants that are `Done`; for a Project it is the same over all its non-archived issues. The derivation rule must be shown in the UI or documentation.
+- Progress is **derived**, never typed in. There is no `progress` column.
+- **Executable work** is every non-archived Sub-task, plus every non-archived Task that has no non-archived Sub-task children.
+- Epics and User Stories are containers: they never count as executable units. A Task that has Sub-tasks is also a container for progress, so a Task and its Sub-tasks are never double-counted.
+- Progress of a parent issue or of a Project is `Done executable descendants / all non-archived executable descendants`. If there is no executable work, progress is 0%.
+- Task **status** is independent of Sub-task status. Completing every Sub-task does not move the Task to Done. Parent status is never auto-changed when children change.
 - No status-to-percentage mapping (for example "In Review = 85 %").
-- Project health is shown as **facts** (overdue count, open high-priority count, items with no assignee, last activity date, target date). A qualitative label (On track / Attention / At risk) may only be set **by a person** (the Project Lead) and must be logged with who set it and when. The system does not invent health labels from thresholds.
+- Project health is shown as **facts** (overdue count, open high-priority count, items with no assignee, last activity date, target date). A qualitative label (Healthy / Attention / At Risk / Blocked) may only be set **by a person** (the Project Lead) and must be logged with who set it and when. The system does not invent health labels from thresholds.
+
+### 1.5 Archiving
+
+- Issued work is **soft-deleted** (`archivedAt`). Activity and issue numbers survive. Numbers are never reused.
+- Archiving an issue that has non-archived children is rejected unless the children are archived in the same operation (`includeDescendants`).
+- Restoring an issue whose parent is still archived is rejected; restore the parent first.
+- Restoring a parent does not automatically restore archived children.
+- Hard-delete of issues is not a normal application operation.
 
 ## 2. User Stories
 

@@ -29,6 +29,7 @@ jobs:
       BETTER_AUTH_URL: http://localhost:3000
       AUTH_PASSWORD_LOGIN_ENABLED: "true"
       WORKSPACE_SLUG: company
+      COMPANY_TIMEZONE: UTC
       STORAGE_DRIVER: local
       STORAGE_LOCAL_DIR: .data/storage
       ATTACHMENT_MAX_BYTES: "26214400"

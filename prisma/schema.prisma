@@ -47,6 +47,28 @@ enum ActorType {
   SYSTEM
 }
 
+enum IssueType {
+  EPIC
+  USER_STORY
+  TASK
+  SUB_TASK
+}
+
+enum IssueStatus {
+  TO_DO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+}
+
+enum IssuePriority {
+  LOWEST
+  LOW
+  MEDIUM
+  HIGH
+  HIGHEST
+}
+
 // ---------------------------------------------------------------------------
 // Identity (Better Auth core models + profile fields)
 // ---------------------------------------------------------------------------
@@ -72,6 +94,12 @@ model User {
   projectsCreated      Project[]            @relation("ProjectCreatedBy")
   healthUpdates        Project[]            @relation("ProjectHealthUpdatedBy")
   activityEvents       ActivityEvent[]
+  issuesCreated        Issue[]              @relation("IssueCreatedBy")
+  issuesReported       Issue[]              @relation("IssueReporter")
+  issuesAssigned       Issue[]              @relation("IssueAssignee")
+  issuesCompleted      Issue[]              @relation("IssueCompletedBy")
+  issuesArchived       Issue[]              @relation("IssueArchivedBy")
+  criteriaMarkedMet    AcceptanceCriterion[] @relation("CriterionMetBy")
 
   @@map("users")
 }
@@ -192,6 +220,7 @@ model Project {
   healthUpdatedById String?        @map("health_updated_by_id")
   targetDate        DateTime?      @map("target_date") @db.Date
   createdById       String         @map("created_by_id")
+  nextIssueNumber   Int            @default(1) @map("next_issue_number")
   archivedAt        DateTime?      @map("archived_at")
   createdAt         DateTime       @default(now()) @map("created_at")
   updatedAt         DateTime       @updatedAt @map("updated_at")
@@ -201,6 +230,8 @@ model Project {
   healthUpdatedBy User?           @relation("ProjectHealthUpdatedBy", fields: [healthUpdatedById], references: [id], onDelete: Restrict)
   members         ProjectMember[]
   activityEvents  ActivityEvent[]
+  issues          Issue[]
+  labels          Label[]
 
   @@unique([workspaceId, key])
   @@index([workspaceId, archivedAt])
@@ -237,6 +268,7 @@ model ActivityEvent {
   projectId   String?   @map("project_id")
   entityType  String    @map("entity_type")
   entityId    String    @map("entity_id")
+  issueId     String?   @map("issue_id")
   action      String
   before      Json?
   after       Json?
@@ -245,10 +277,119 @@ model ActivityEvent {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   actor     User?     @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
   project   Project?  @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  issue     Issue?    @relation(fields: [issueId], references: [id], onDelete: Restrict)
 
   @@index([workspaceId, occurredAt(sort: Desc)])
   @@index([projectId, occurredAt(sort: Desc)])
   @@index([actorUserId, occurredAt(sort: Desc)])
   @@index([entityType, entityId])
+  @@index([issueId, occurredAt(sort: Desc)])
   @@map("activity_events")
+}
+
+// ---------------------------------------------------------------------------
+// Issues (Project → Epic → User Story → Task → Sub-task)
+// ---------------------------------------------------------------------------
+
+model Issue {
+  id            String        @id @default(uuid())
+  projectId     String        @map("project_id")
+  number        Int
+  type          IssueType
+  parentId      String?       @map("parent_id")
+  title         String
+  description   String?
+  status        IssueStatus   @default(TO_DO)
+  priority      IssuePriority @default(MEDIUM)
+  assigneeId    String?       @map("assignee_id")
+  reporterId    String        @map("reporter_id")
+  createdById   String        @map("created_by_id")
+  dueDate       DateTime?     @map("due_date") @db.Date
+  rank          String        @default("a0")
+  completedAt   DateTime?     @map("completed_at")
+  completedById String?       @map("completed_by_id")
+  archivedAt    DateTime?     @map("archived_at")
+  archivedById  String?       @map("archived_by_id")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  project     Project               @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  parent      Issue?                @relation("IssueHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children    Issue[]               @relation("IssueHierarchy")
+  assignee    User?                 @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+  reporter    User                  @relation("IssueReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  createdBy   User                  @relation("IssueCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  completedBy User?                 @relation("IssueCompletedBy", fields: [completedById], references: [id], onDelete: Restrict)
+  archivedBy  User?                 @relation("IssueArchivedBy", fields: [archivedById], references: [id], onDelete: Restrict)
+  story       UserStoryDetails?
+  criteria    AcceptanceCriterion[]
+  labels      IssueLabel[]
+  activity    ActivityEvent[]
+
+  @@unique([projectId, number])
+  @@index([projectId, parentId])
+  @@index([projectId, type])
+  @@index([projectId, status])
+  @@index([projectId, archivedAt])
+  @@index([assigneeId])
+  @@index([dueDate])
+  @@map("issues")
+}
+
+model UserStoryDetails {
+  issueId String @id @map("issue_id")
+  asA     String @map("as_a")
+  iWant   String @map("i_want")
+  soThat  String @map("so_that")
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Restrict)
+
+  @@map("user_story_details")
+}
+
+model AcceptanceCriterion {
+  id        String    @id @default(uuid())
+  issueId   String    @map("issue_id")
+  position  Int
+  text      String
+  isMet     Boolean   @default(false) @map("is_met")
+  metById   String?   @map("met_by_id")
+  metAt     DateTime? @map("met_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Restrict)
+  metBy User? @relation("CriterionMetBy", fields: [metById], references: [id], onDelete: Restrict)
+
+  @@index([issueId, deletedAt])
+  @@map("acceptance_criteria")
+}
+
+model Label {
+  id        String   @id @default(uuid())
+  projectId String   @map("project_id")
+  name      String
+  color     String   @default("#64748b")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  project Project      @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  issues  IssueLabel[]
+
+  @@unique([projectId, name])
+  @@index([projectId])
+  @@map("labels")
+}
+
+model IssueLabel {
+  issueId String @map("issue_id")
+  labelId String @map("label_id")
+
+  issue Issue @relation(fields: [issueId], references: [id], onDelete: Restrict)
+  label Label @relation(fields: [labelId], references: [id], onDelete: Restrict)
+
+  @@id([issueId, labelId])
+  @@index([labelId])
+  @@map("issue_labels")
 }

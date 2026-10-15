@@ -2,7 +2,7 @@
 
 > **Source of truth:** [`PRODUCT-RULES.md`](PRODUCT-RULES.md), [`ARCHITECTURE-PLAN.md`](ARCHITECTURE-PLAN.md), [`MIGRATION-PLAN.md`](MIGRATION-PLAN.md).
 > Direct AI-agent execution is **Future / Optional — Not Current Scope**.
-> The production foundation (Next.js, PostgreSQL, auth, roles, projects) is already in progress on `feat/production-foundation`. Do not rebuild it from the prototype.
+> The production foundation and core Issue domain are implemented on `feat/core-pms-domain`. Do not rebuild them from the prototype. Direct AI-agent execution remains **Future / Optional — Not Current Scope**.
 
 ## Mission
 

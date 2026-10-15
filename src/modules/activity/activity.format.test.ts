@@ -15,7 +15,7 @@ describe("describeActivity", () => {
     ).toBe("changed health from Healthy to At risk");
   });
 
-  test("does not invent wording for unknown actions", () => {
+  test("renders issue creation and status changes from structured values", () => {
     expect(
       describeActivity({
         id: "1",
@@ -23,8 +23,31 @@ describe("describeActivity", () => {
         action: "issue.created",
         actorName: "Alex",
         before: null,
+        after: { type: "EPIC", key: "AQUA-1" },
+      }),
+    ).toBe("created Epic AQUA-1");
+    expect(
+      describeActivity({
+        id: "2",
+        occurredAt: new Date(),
+        action: "issue.updated",
+        actorName: "Alex",
+        before: { status: "TO_DO" },
+        after: { status: "DONE" },
+      }),
+    ).toBe("changed status from To Do to Done");
+  });
+
+  test("does not invent wording for unknown actions", () => {
+    expect(
+      describeActivity({
+        id: "1",
+        occurredAt: new Date(),
+        action: "not.a.real.action",
+        actorName: "Alex",
+        before: null,
         after: null,
       }),
-    ).toBe("issue.created");
+    ).toBe("not.a.real.action");
   });
 });

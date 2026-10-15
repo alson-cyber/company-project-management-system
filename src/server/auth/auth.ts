@@ -19,6 +19,8 @@ export const auth = betterAuth({
   secret: env.BETTER_AUTH_SECRET,
   database: prismaAdapter(prisma, { provider: "postgresql" }),
   telemetry: { enabled: false },
+  // Sign-in rate limiting is for production. Local tests log in many times in one run.
+  rateLimit: { enabled: env.NODE_ENV === "production" },
   advanced: {
     database: {
       // Prisma requires `id` on create; generate it before the adapter writes.

@@ -114,12 +114,13 @@ describe("project mutations", () => {
       ForbiddenError,
     );
 
-    const result = await setProjectHealth(lead, { projectId: aqua.id, health: "BLOCKED", note: "Need a design review." });
+    const nextHealth = aqua.health === "BLOCKED" ? "ATTENTION" : "BLOCKED";
+    const result = await setProjectHealth(lead, { projectId: aqua.id, health: nextHealth, note: "Need a design review." });
     expect(result.changed).toBe(true);
-    expect(result.health).toBe("BLOCKED");
+    expect(result.health).toBe(nextHealth);
 
     const stored = await testDb.project.findUniqueOrThrow({ where: { id: aqua.id } });
-    expect(stored.health).toBe("BLOCKED");
+    expect(stored.health).toBe(nextHealth);
     expect(stored.healthUpdatedById).toBe(lead.userId);
   });
 

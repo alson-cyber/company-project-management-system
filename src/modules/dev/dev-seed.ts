@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { hashPassword } from "better-auth/crypto";
 import type { Database } from "@/server/db";
 import { SEED_PROJECTS, SEED_USERS, SEED_WORKSPACE, type SeedProject, type SeedUser } from "@/modules/dev/dev-fixtures";
+import { seedProjectIssueTrees } from "@/modules/dev/seed-issues";
 
 export interface SeedSummary {
   workspaceId: string;
@@ -9,6 +10,7 @@ export interface SeedSummary {
   projects: number;
   memberships: number;
   projectsCreated: number;
+  issuesCreated: number;
 }
 
 export async function seedDevelopmentData(
@@ -123,11 +125,14 @@ export async function seedDevelopmentData(
     memberships += seedProject.members.length;
   }
 
+  const issues = await seedProjectIssueTrees(db, { workspaceId: workspace.id, userIds });
+
   return {
     workspaceId: workspace.id,
     users: SEED_USERS.length,
     projects: SEED_PROJECTS.length,
     memberships,
     projectsCreated,
+    issuesCreated: issues.issuesCreated,
   };
 }

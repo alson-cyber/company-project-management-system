@@ -1,6 +1,6 @@
 # Migration Plan — Prototype to Production
 
-Status: **in progress** on `feat/production-foundation`. Phases 1–3 of this plan (tooling, schema, auth/authorization) plus the Project foundation and application shell are implemented. The issue domain has not been started. Each phase is a reviewable set of commits on a feature branch; nothing is merged into `main`, pushed or deployed without explicit approval.
+Status: **in progress** on `feat/core-pms-domain`. Phases 1–5 of this plan (tooling, schema, auth, core issue services, project Issues workspace) are implemented at foundation depth. Notes/comments/attachments, board, timeline, inbox and reports are not. Each phase is a reviewable set of commits on a feature branch; nothing is merged into `main`, pushed or deployed without explicit approval.
 
 Inputs: `CURRENT-STATE.md` (what exists), `PRODUCT-RULES.md` (binding rules), `ARCHITECTURE-PLAN.md` (target design).
 

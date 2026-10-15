@@ -11,4 +11,5 @@ process.env.BETTER_AUTH_SECRET ??= "test-secret-which-is-32-chars-min";
 process.env.BETTER_AUTH_URL ??= "http://localhost:3000";
 process.env.SEED_DEV_PASSWORD ??= "workhub-dev-only-pass";
 process.env.WORKSPACE_SLUG ??= "company";
+process.env.COMPANY_TIMEZONE ??= "UTC";
 process.env.STORAGE_DRIVER ??= "local";

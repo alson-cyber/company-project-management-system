@@ -1,6 +1,6 @@
 # Production Architecture Plan
 
-Status: **in progress** — the production foundation (tooling, schema, auth, roles, project membership, shell) is implemented. Issue hierarchy is not. Read with `CURRENT-STATE.md` (evidence) and `PRODUCT-RULES.md` (binding rules).
+Status: **in progress** — production foundation and the core Issue domain (hierarchy, keys, stories, activity, minimum Issues UI) are implemented. Board, timeline, attachments, inbox and reports are not. Read with `CURRENT-STATE.md` (evidence) and `PRODUCT-RULES.md` (binding rules). Implementation notes: `docs/ISSUE-DOMAIN.md`.
 
 ## 1. Constraints found during the audit
 
@@ -221,7 +221,7 @@ Direct-to-storage presigned uploads can replace step 1–3 later if file sizes g
 | Company identity provider (Microsoft Entra ID, Google Workspace, other, or none) | Determines OIDC configuration and whether passwords exist at all | OIDC-ready auth with email + password for local development only |
 | Hosting target (company VM/Docker, a PaaS, a cloud provider) | Affects storage driver, database hosting, secrets, backups | Docker image + managed PostgreSQL + S3-compatible bucket |
 | Object storage provider | Driver configuration only | S3-compatible; MinIO in Docker for local development |
-| Company time zone for "overdue" | Date boundary for due dates | `Indian/Maldives` (UTC+5), configurable |
+| Company time zone for "overdue" | Date boundary for due dates | `COMPANY_TIMEZONE` env (default `UTC`). Due dates are stored as calendar dates, not as a country-specific zone. |
 | Defaults listed in `PRODUCT-RULES.md` §10 | Product behaviour | As written there |
 
 ## 11. Explicitly not in the first production release

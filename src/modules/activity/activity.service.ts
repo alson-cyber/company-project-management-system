@@ -8,6 +8,7 @@ export interface RecordActivityInput {
   entityType: ActivityEntityType;
   entityId: string;
   projectId?: string;
+  issueId?: string;
   before?: JsonObject;
   after?: JsonObject;
   metadata?: JsonObject;
@@ -28,6 +29,7 @@ export async function recordActivity(tx: Prisma.TransactionClient, input: Record
       entityType: input.entityType,
       entityId: input.entityId,
       projectId: input.projectId ?? null,
+      issueId: input.issueId ?? null,
       ...(input.before ? { before: input.before } : {}),
       ...(input.after ? { after: input.after } : {}),
       ...(input.metadata ? { metadata: input.metadata } : {}),

@@ -19,7 +19,7 @@ async function main() {
     });
     console.log(
       `Seeded workspace ${summary.workspaceId}: ${summary.users} users, ${summary.projects} projects ` +
-        `(${summary.projectsCreated} new), ${summary.memberships} memberships.`,
+        `(${summary.projectsCreated} new), ${summary.memberships} memberships, ${summary.issuesCreated} issues.`,
     );
   } finally {
     await db.$disconnect();

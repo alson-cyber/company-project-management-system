@@ -6,7 +6,7 @@ The mandatory hierarchy is **Project → Epic → User Story → Task → Sub-ta
 
 ## Current stage
 
-**Production foundation.** The app is a real Next.js application with PostgreSQL, Prisma migrations, database-backed sessions, users, roles, project membership and a polished shell. The issue hierarchy is **not** implemented yet.
+**Core PMS domain.** The app is a real Next.js application with PostgreSQL, Prisma migrations, database-backed sessions, roles, project membership, and the Issue hierarchy (Epic → User Story → Task → Sub-task). Board, timeline, attachments, inbox and reports are not built yet.
 
 Authoritative documents:
 
@@ -14,6 +14,7 @@ Authoritative documents:
 - [`docs/ARCHITECTURE-PLAN.md`](docs/ARCHITECTURE-PLAN.md) — production architecture
 - [`docs/MIGRATION-PLAN.md`](docs/MIGRATION-PLAN.md) — staged migration
 - [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md) — audit of the original prototype
+- [`docs/ISSUE-DOMAIN.md`](docs/ISSUE-DOMAIN.md) — issue keys, progress, archive, activity
 
 The Checkpoint 0.5 clickable prototype is preserved in [`prototype/`](prototype/) for visual comparison. It is not the running product.
 
@@ -62,6 +63,7 @@ Every variable is documented in `.env.example` and validated by `src/server/env.
 | `BETTER_AUTH_URL` | Public origin, e.g. `http://localhost:3000` |
 | `SEED_DEV_PASSWORD` | Shared password for seeded development users |
 | `ATTACHMENT_MAX_BYTES` | Attachment size limit (default 26214400 = 25 MB) |
+| `COMPANY_TIMEZONE` | IANA zone used for “today” when deciding overdue (default `UTC`) |
 | `STORAGE_DRIVER` | `local` or `s3` |
 | `AUTH_OIDC_*` | Optional company SSO. Leave blank until the identity provider is chosen. |
 
@@ -111,7 +113,7 @@ Then open [http://localhost:4173](http://localhost:4173). See [`prototype/README
 | `pnpm db:up` | Start PostgreSQL (health-checked) |
 | `pnpm db:down` | Stop PostgreSQL (volume is kept) |
 | `pnpm db:deploy` | Apply migrations |
-| `pnpm db:seed` | Seed development users and projects |
+| `pnpm db:seed` | Seed development users, projects and issues |
 | `pnpm db:reset` | Drop, migrate, seed (destroys local data) |
 | `pnpm db:studio` | Prisma Studio |
 | `pnpm prototype` | Serve the preserved Checkpoint 0.5 UI |
