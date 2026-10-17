@@ -1,15 +1,13 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { ProjectOverview } from "@/components/projects/project-overview";
 import { ProjectWorkspaceHeader } from "@/components/projects/project-workspace-header";
 import { calendarDayUtc, todayInTimeZone } from "@/lib/calendar";
 import { listProjectActivity } from "@/modules/activity/activity.queries";
-import { getVisibleProjectByKey } from "@/modules/projects/project.queries";
 import { overviewSignals } from "@/modules/projects/workspace.model";
 import { listProjectWorkspaceIssues } from "@/modules/projects/workspace.queries";
 import { hasProjectPermission } from "@/server/access/policy";
-import { requireAuthContext } from "@/server/access/session";
 import { getEnv } from "@/server/env";
+import { visibleProject } from "./guard";
 
 export async function generateMetadata({
   params,
@@ -17,14 +15,13 @@ export async function generateMetadata({
   params: Promise<{ projectKey: string }>;
 }): Promise<Metadata> {
   const { projectKey } = await params;
-  return { title: `${projectKey.toUpperCase()} · Overview` };
+  const { project } = await visibleProject(projectKey);
+  return { title: `${project.key} · Overview` };
 }
 
 export default async function ProjectPage({ params }: { params: Promise<{ projectKey: string }> }) {
   const { projectKey } = await params;
-  const ctx = await requireAuthContext();
-  const project = await getVisibleProjectByKey(ctx, projectKey);
-  if (!project) notFound();
+  const { ctx, project } = await visibleProject(projectKey);
 
   const [issues, activity] = await Promise.all([
     listProjectWorkspaceIssues(ctx, project.id),

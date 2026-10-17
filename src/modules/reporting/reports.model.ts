@@ -1,4 +1,4 @@
-import { addCalendarDays } from "@/lib/calendar";
+import { addCalendarDays, calendarDayUtc, parseCalendarDate } from "@/lib/calendar";
 import { ISSUE_PRIORITIES, ISSUE_STATUSES, ISSUE_TYPES } from "@/modules/issues/issue.constants";
 import { ACTIVITY_ACTIONS, type ActivityAction } from "@/modules/activity/activity.types";
 import type { IssuePriority, IssueStatus, IssueType } from "@/generated/prisma/enums";
@@ -93,9 +93,41 @@ export interface ReportFilters {
   issueKey: string | null;
 }
 
+const MAX_REPORT_RANGE_DAYS = 366;
+const CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const PROJECT_KEY = /^[A-Z][A-Z0-9]{1,11}$/;
+
 function oneOf<T extends string>(value: string | undefined, allowed: readonly T[]): T | null {
   if (!value) return null;
   return (allowed as readonly string[]).includes(value) ? (value as T) : null;
+}
+
+function calendarOrNull(value: string | undefined): string | null {
+  if (!value || !CALENDAR_DATE.test(value)) return null;
+  const parsed = parseCalendarDate(value);
+  if (Number.isNaN(parsed.getTime()) || calendarDayUtc(parsed) !== value) return null;
+  return value;
+}
+
+function uuidOrNull(value: string | undefined): string | null {
+  if (!value) return null;
+  return UUID.test(value) ? value : null;
+}
+
+function projectKeyOrNull(value: string | undefined): string | null {
+  const key = value?.trim().toUpperCase() ?? "";
+  return PROJECT_KEY.test(key) ? key : null;
+}
+
+/** Keeps a custom window inside one year so a hostile range cannot expand a day-by-day series. */
+function boundedRange(from: string, to: string): { from: string; to: string } {
+  if (from > to) return { from: to, to };
+  const span = parseCalendarDate(to).getTime() - parseCalendarDate(from).getTime();
+  if (span > (MAX_REPORT_RANGE_DAYS - 1) * 86_400_000) {
+    return { from: addCalendarDays(to, -(MAX_REPORT_RANGE_DAYS - 1)), to };
+  }
+  return { from, to };
 }
 
 export function parseReportFilters(input: Record<string, string | string[] | undefined>, today: string): ReportFilters {
@@ -104,23 +136,25 @@ export function parseReportFilters(input: Record<string, string | string[] | und
     return typeof value === "string" ? value : undefined;
   };
   const range = oneOf(read("range"), ["7", "30", "90", "custom"] as const) ?? "30";
-  const customFrom = read("from");
-  const customTo = read("to");
-  const from = range === "custom" && customFrom ? customFrom : addCalendarDays(today, -(Number(range === "custom" ? "30" : range) - 1));
-  const to = range === "custom" && customTo ? customTo : today;
+  const customFrom = calendarOrNull(read("from"));
+  const customTo = calendarOrNull(read("to"));
+  const preset = range === "custom" ? "30" : range;
+  const unclampedFrom = range === "custom" && customFrom ? customFrom : addCalendarDays(today, -(Number(preset) - 1));
+  const unclampedTo = range === "custom" && customTo ? customTo : today;
+  const bounded = boundedRange(unclampedFrom, unclampedTo);
   const issueKey = read("issue")?.trim().toUpperCase() || null;
   return {
-    projectKey: read("project")?.trim().toUpperCase() || null,
-    assigneeId: read("assignee") || null,
+    projectKey: projectKeyOrNull(read("project")),
+    assigneeId: uuidOrNull(read("assignee")),
     status: oneOf(read("status"), ISSUE_STATUSES),
     priority: oneOf(read("priority"), ISSUE_PRIORITIES),
     issueType: oneOf(read("type"), ISSUE_TYPES),
     action: oneOf(read("action"), ACTIVITY_ACTIONS),
-    actorId: read("actor") || null,
+    actorId: uuidOrNull(read("actor")),
     range,
-    from,
-    to,
-    cursor: read("cursor") || null,
+    from: bounded.from,
+    to: bounded.to,
+    cursor: read("cursor")?.slice(0, 80) || null,
     issueKey: issueKey && /^[A-Z][A-Z0-9]+-\d+$/.test(issueKey) ? issueKey : null,
   };
 }

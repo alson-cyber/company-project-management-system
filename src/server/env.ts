@@ -89,6 +89,26 @@ export const envSchema = z
         message: "At least one sign-in method must be enabled (password or OIDC)",
       });
     }
+
+    const localPreview =
+      env.BETTER_AUTH_URL.startsWith("http://localhost") || env.BETTER_AUTH_URL.startsWith("http://127.0.0.1");
+    if (env.NODE_ENV === "production" && !localPreview) {
+      const secret = env.BETTER_AUTH_SECRET.toLowerCase();
+      if (secret.includes("replace-with") || secret.includes("dev-only") || secret.includes("changeme")) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["BETTER_AUTH_SECRET"],
+          message: "Production refuses a placeholder or development secret",
+        });
+      }
+      if (env.DATABASE_URL.includes("pms_local_dev")) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["DATABASE_URL"],
+          message: "Production refuses the local development database credential",
+        });
+      }
+    }
   });
 
 export type Env = z.output<typeof envSchema>;

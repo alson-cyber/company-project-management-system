@@ -341,6 +341,13 @@ export async function removeAttachment(ctx: AuthContext, rawInput: unknown): Pro
   assertEditable(issue);
   assertCanRevise(ctx, issue.projectId, attachment.uploadedById);
 
+  const storage = await getObjectStorage();
+  await storage.delete(attachment.objectKey);
+  const remaining = await storage.head(attachment.objectKey);
+  if (remaining) {
+    throw new ValidationError("The stored file could not be deleted. The attachment is still available.");
+  }
+
   await prisma.$transaction(async (tx) => {
     await assertStillEditable(tx, issue.id);
     await tx.issueAttachment.update({ where: { id: attachment.id }, data: { deletedAt: new Date() } });
@@ -352,13 +359,6 @@ export async function removeAttachment(ctx: AuthContext, rawInput: unknown): Pro
       before: { filename: attachment.originalFilename },
     });
   });
-
-  const storage = await getObjectStorage();
-  await storage.delete(attachment.objectKey);
-  const remaining = await storage.head(attachment.objectKey);
-  if (remaining) {
-    throw new ValidationError("The attachment was removed, but the stored file could not be deleted.");
-  }
   return { removed: true };
 }
 

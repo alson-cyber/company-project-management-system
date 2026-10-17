@@ -6,6 +6,7 @@ import type { AuthContext } from "@/server/access/types";
 import { prisma } from "@/server/db";
 
 const RESULT_LIMIT = 8;
+const QUERY_LIMIT = 80;
 
 export interface SearchProject {
   id: string;
@@ -41,7 +42,7 @@ const empty = (query: string): SearchResults => ({ query, projects: [], issues: 
 
 /** Permission-aware search. Issue and project content follow project visibility. Email is admin-only. */
 export async function searchWorkspace(ctx: AuthContext, rawQuery: string): Promise<SearchResults> {
-  const query = rawQuery.trim().replace(/\s+/g, " ");
+  const query = rawQuery.trim().replace(/\s+/g, " ").slice(0, QUERY_LIMIT);
   if (query.length < 2) return empty(query);
 
   const projectWhere = visibleProjectsWhere(ctx);

@@ -11,10 +11,11 @@ import { getVisibleProjectByKey } from "@/modules/projects/project.queries";
 import { memberFacts } from "@/modules/projects/workspace.model";
 import { listProjectWorkspaceIssues } from "@/modules/projects/workspace.queries";
 import { requireAuthContext } from "@/server/access/session";
+import { visibleProject } from "../guard";
 
 export async function generateMetadata({ params }: { params: Promise<{ projectKey: string }> }): Promise<Metadata> {
-  const { projectKey } = await params;
-  return { title: `${projectKey.toUpperCase()} · Team` };
+  const { project } = await visibleProject((await params).projectKey);
+  return { title: `${project.key} · Team` };
 }
 
 export default async function TeamPage({ params }: { params: Promise<{ projectKey: string }> }) {

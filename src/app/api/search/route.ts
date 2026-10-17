@@ -1,10 +1,13 @@
 import { searchWorkspace } from "@/modules/attention/search.queries";
 import { getActionAuthContext } from "@/server/access/session";
 import { UnauthenticatedError } from "@/server/errors";
+import { consumeRateLimit, tooManyRequests } from "@/server/security/rate-limit";
 
 export async function GET(request: Request) {
   try {
     const ctx = await getActionAuthContext();
+    const limit = consumeRateLimit(`search:${ctx.userId}`, 60, 60_000);
+    if (!limit.ok) return tooManyRequests(limit.retryAfterSeconds);
     const query = new URL(request.url).searchParams.get("q") ?? "";
     const results = await searchWorkspace(ctx, query);
     return Response.json(results);

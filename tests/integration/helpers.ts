@@ -37,5 +37,6 @@ export const emails = {
   member: "alex.noor@workhub.test",
   designer: "mika.ross@workhub.test",
   admin: "omar.haleem@workhub.test",
+  qa: "emma.davis@workhub.test",
   deactivated: "lina.farah@workhub.test",
 } as const;

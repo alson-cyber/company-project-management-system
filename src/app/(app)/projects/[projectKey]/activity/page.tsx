@@ -9,10 +9,11 @@ import { ACTIVITY_ACTIONS } from "@/modules/activity/activity.types";
 import { parseIssueKey } from "@/modules/issues/issue.keys";
 import { getVisibleProjectByKey } from "@/modules/projects/project.queries";
 import { requireAuthContext } from "@/server/access/session";
+import { visibleProject } from "../guard";
 
 export async function generateMetadata({ params }: { params: Promise<{ projectKey: string }> }): Promise<Metadata> {
-  const { projectKey } = await params;
-  return { title: `${projectKey.toUpperCase()} · Activity` };
+  const { project } = await visibleProject((await params).projectKey);
+  return { title: `${project.key} · Activity` };
 }
 
 function first(value: string | string[] | undefined): string {

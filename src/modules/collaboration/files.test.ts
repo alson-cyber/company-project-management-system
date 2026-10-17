@@ -6,6 +6,7 @@ describe("attachment filenames and types", () => {
     expect(sanitizeFilename("../../etc/passwd")).toBe("passwd");
     expect(sanitizeFilename("booking reference.png")).toBe("booking reference.png");
     expect(sanitizeFilename("a\u0000b.txt")).toBe("ab.txt");
+    expect(sanitizeFilename("report\r\nSet-Cookie: x")).toBe("reportSet-Cookie_ x");
     expect(sanitizeFilename("   ")).toBe("file");
     expect(sanitizeFilename("x".repeat(400))).toHaveLength(180);
   });
