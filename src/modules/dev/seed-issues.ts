@@ -507,6 +507,52 @@ async function insertNode(
   return createdCount;
 }
 
+async function seedHealthIfEmpty(
+  db: Database,
+  workspaceId: string,
+  projectKey: string,
+  actorId: string,
+  health: "HEALTHY" | "ATTENTION" | "AT_RISK" | "BLOCKED",
+  note: string,
+) {
+  const project = await db.project.findUnique({
+    where: { workspaceId_key: { workspaceId, key: projectKey } },
+    select: { id: true, health: true },
+  });
+  if (!project || project.health) return;
+  await recordSeedHealth(db, { workspaceId, projectId: project.id, actorId, health, note });
+}
+
+async function recordSeedHealth(
+  db: Database,
+  input: {
+    workspaceId: string;
+    projectId: string;
+    actorId: string;
+    health: "HEALTHY" | "ATTENTION" | "AT_RISK" | "BLOCKED";
+    note: string;
+  },
+) {
+  await db.project.update({
+    where: { id: input.projectId },
+    data: { health: input.health, healthNote: input.note, healthUpdatedAt: new Date(), healthUpdatedById: input.actorId },
+  });
+  await db.activityEvent.create({
+    data: {
+      workspaceId: input.workspaceId,
+      actorType: "USER",
+      actorUserId: input.actorId,
+      action: "project.health_changed",
+      entityType: "project",
+      entityId: input.projectId,
+      projectId: input.projectId,
+      before: { health: null },
+      after: { health: input.health, note: input.note },
+      metadata: { source: "development-seed" },
+    },
+  });
+}
+
 function requireUser(userIds: Map<string, string>, email: string): string {
   const id = userIds.get(email);
   if (!id) throw new Error(`Unknown seed user ${email}`);
@@ -574,26 +620,17 @@ async function ensureWorkspaceDemo(
   if (!aqua) return;
   const sarahId = requireUser(input.userIds, "sarah.kim@workhub.test");
   if (!aqua.health) {
-    const note = "Availability work is overdue and still in progress.";
-    await db.project.update({
-      where: { id: aqua.id },
-      data: { health: "ATTENTION", healthNote: note, healthUpdatedAt: new Date(), healthUpdatedById: sarahId },
-    });
-    await db.activityEvent.create({
-      data: {
-        workspaceId: input.workspaceId,
-        actorType: "USER",
-        actorUserId: sarahId,
-        action: "project.health_changed",
-        entityType: "project",
-        entityId: aqua.id,
-        projectId: aqua.id,
-        before: { health: null },
-        after: { health: "ATTENTION", note },
-        metadata: { source: "development-seed" },
-      },
+    await recordSeedHealth(db, {
+      workspaceId: input.workspaceId,
+      projectId: aqua.id,
+      actorId: sarahId,
+      health: "ATTENTION",
+      note: "Availability work is overdue and still in progress.",
     });
   }
+  const leadId = requireUser(input.userIds, "alex.noor@workhub.test");
+  await seedHealthIfEmpty(db, input.workspaceId, "SV", leadId, "AT_RISK", "Signing reliability still has open review work.");
+  await seedHealthIfEmpty(db, input.workspaceId, "AIB", leadId, "HEALTHY", "Registration work is on track.");
 
   const availability = await db.issue.findFirst({
     where: { projectId: aqua.id, title: "Implement availability API" },

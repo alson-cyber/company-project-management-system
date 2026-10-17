@@ -36,7 +36,7 @@ export function buildNavigation(options: {
     { href: "/my-work", label: "My Work", icon: "work" },
     { href: "/inbox", label: "Inbox", icon: "inbox", ...(unread > 0 ? { badge: unread } : {}) },
     { href: "/team", label: "Team", icon: "team" },
-    { href: "/reports", label: "Reports", icon: "reports", upcoming: true },
+    { href: "/reports", label: "Reports", icon: "reports" },
   ];
   const management: NavItem[] = [];
   if (options.canViewExecutive) management.push({ href: "/executive", label: "Executive", icon: "crown" });
