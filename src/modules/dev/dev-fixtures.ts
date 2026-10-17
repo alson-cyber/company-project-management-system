@@ -78,7 +78,7 @@ export const SEED_PROJECTS = [
     description: "Registration portal for Accountants in Business members.",
     status: "ACTIVE",
     color: "#e6a62b",
-    targetDate: "2026-11-27",
+    targetDate: "2026-10-26",
     members: [
       { email: "alex.noor@workhub.test", role: "LEAD" },
       { email: "emma.davis@workhub.test", role: "MEMBER" },

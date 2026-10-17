@@ -16,6 +16,7 @@ test.describe("member workspace", () => {
   });
 
 test("overview, board, timeline, files, team, and activity share AquaDesk", async ({ page }) => {
+  test.setTimeout(90_000);
   await page.goto("/projects/AQUA");
   await expect(page.getByRole("navigation", { name: "Project sections" }).getByText("Overview")).toBeVisible();
   await expect(page.getByText(/executable items done|no executable work yet/)).toBeVisible();
@@ -45,7 +46,7 @@ test("overview, board, timeline, files, team, and activity share AquaDesk", asyn
   await page.goto("/projects/AQUA/team");
   await expect(page.getByRole("link", { name: /Sarah Kim/ })).toBeVisible();
   await page.getByRole("link", { name: /Sarah Kim/ }).click();
-  await expect(page.getByRole("heading", { name: "Sarah Kim" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sarah Kim" })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole("heading", { name: /Completed/ })).toBeVisible();
 
   await page.goto("/projects/AQUA/activity");

@@ -277,3 +277,24 @@ const ACTION_LABELS: Record<ActivityAction, string> = {
 export function activityActionLabel(action: string): string {
   return action in ACTION_LABELS ? ACTION_LABELS[action as ActivityAction] : action;
 }
+
+function labeled(map: Record<string, string>, value: unknown): string | null {
+  return typeof value === "string" && value in map ? (map[value] ?? null) : null;
+}
+
+/** A short before/after line when the event recorded one. Empty when there is nothing to show. */
+export function activityChangeDetail(event: Pick<ActivityEventView, "before" | "after">): string | null {
+  const status = labeled(ISSUE_STATUS_LABELS, field(event.before, "status"));
+  const nextStatus = labeled(ISSUE_STATUS_LABELS, field(event.after, "status"));
+  if (status && nextStatus && status !== nextStatus) return `${status} → ${nextStatus}`;
+  const priority = labeled(ISSUE_PRIORITY_LABELS, field(event.before, "priority"));
+  const nextPriority = labeled(ISSUE_PRIORITY_LABELS, field(event.after, "priority"));
+  if (priority && nextPriority && priority !== nextPriority) return `${priority} → ${nextPriority}`;
+  const health = field(event.before, "health");
+  const nextHealth = field(event.after, "health");
+  if (nextHealth !== undefined && health !== nextHealth) return `${healthLabel(health)} → ${healthLabel(nextHealth)}`;
+  const beforeDate = textOf(event.before, "targetDate") ?? textOf(event.before, "dueDate");
+  const afterDate = textOf(event.after, "targetDate") ?? textOf(event.after, "dueDate");
+  if (beforeDate && afterDate && beforeDate !== afterDate) return `${beforeDate} → ${afterDate}`;
+  return null;
+}

@@ -4,7 +4,7 @@
 >
 > The Checkpoint 0.5 prototype remains in `prototype/` as a visual reference. Direct AI-agent execution is **Future / Optional — Not Current Scope**.
 >
-> My Work, Inbox and search are personal surfaces over the same issues. Inbox rows are notifications with read state. Activity remains the append-only history and is never updated when a notification is marked read. In-app only: no email or push. Rules: `PRODUCT-RULES.md` §5.1–§5.2.
+> My Work, Inbox and search are personal surfaces over the same issues. Inbox rows are notifications with read state. Activity remains the append-only history and is never updated when a notification is marked read. Executive and Reports read that same history and the same issue rules; they do not keep a second analytics store. In-app only: no email or push. Rules: `PRODUCT-RULES.md` §5.1–§5.3.
 
 ## Historical checkpoint (prototype)
 

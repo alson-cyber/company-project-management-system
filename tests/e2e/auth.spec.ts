@@ -47,8 +47,8 @@ test("an Executive can open the Executive overview", async ({ page }) => {
   await signIn(page, accounts.executive);
   await page.goto("/executive");
   await expect(page.getByRole("heading", { name: "Company delivery overview" })).toBeVisible();
-  await expect(page.getByText("AquaDesk")).toBeVisible();
-  await expect(page.getByText("SignVeli")).toBeVisible();
+  await expect(page.locator("#portfolio").getByRole("link", { name: "AquaDesk" })).toBeVisible();
+  await expect(page.locator("#portfolio").getByRole("link", { name: "SignVeli" })).toBeVisible();
 });
 
 test("an Admin without membership does not see project content and cannot open Executive", async ({ page }) => {

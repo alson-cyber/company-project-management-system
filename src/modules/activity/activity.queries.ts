@@ -5,8 +5,10 @@ import { assertProjectPermission, assertWorkspacePermission } from "@/server/acc
 import type { AuthContext } from "@/server/access/types";
 import { ACTIVITY_ACTIONS, type ActivityAction } from "@/modules/activity/activity.types";
 import { issueKey } from "@/modules/issues/issue.keys";
+import { visibleProjectsWhere } from "@/modules/projects/project.queries";
 import { addCalendarDays } from "@/modules/projects/workspace.model";
 import { parseCalendarDate } from "@/lib/calendar";
+import type { IssueType } from "@/generated/prisma/enums";
 import type { ActivityEventView } from "@/modules/activity/activity.format";
 
 const activitySelect = {
@@ -150,16 +152,91 @@ export function isActivityAction(value: string): value is ActivityAction {
 
 export interface WorkspaceActivityEvent extends ActivityEventView {
   project: { key: string; name: string } | null;
+  issue: { key: string; number: number; title: string } | null;
 }
 
 /** Company-wide activity. Executive-only; never reconstructed from current state. */
 export async function listWorkspaceActivity(ctx: AuthContext, limit = 25): Promise<WorkspaceActivityEvent[]> {
   assertWorkspacePermission(ctx, "executive.view");
+  const page = await listScopedActivity(ctx, { take: limit });
+  return page.rows;
+}
+
+export const ACTIVITY_PAGE_SIZE = 40;
+export const ACTIVITY_EXPORT_LIMIT = 1000;
+
+export interface ScopedActivityQuery {
+  projectId?: string;
+  actorId?: string;
+  action?: ActivityAction;
+  issueType?: IssueType;
+  issueNumber?: number;
+  from?: string;
+  to?: string;
+  cursor?: string;
+  take?: number;
+}
+
+export interface ScopedActivityPage {
+  rows: (WorkspaceActivityEvent & { actorId: string | null })[];
+  nextCursor: string | null;
+}
+
+function activityCursor(occurredAt: Date, id: string): string {
+  return `${occurredAt.toISOString()}|${id}`;
+}
+
+function readCursor(cursor: string | undefined): { occurredAt: Date; id: string } | null {
+  if (!cursor) return null;
+  const split = cursor.lastIndexOf("|");
+  if (split <= 0) return null;
+  const occurredAt = new Date(cursor.slice(0, split));
+  const id = cursor.slice(split + 1);
+  if (Number.isNaN(occurredAt.getTime()) || !id) return null;
+  return { occurredAt, id };
+}
+
+/**
+ * Activity the viewer may see, newest first. The result is one page, not the lifetime log.
+ * A project id outside the viewer's visibility matches nothing.
+ */
+export async function listScopedActivity(ctx: AuthContext, query: ScopedActivityQuery = {}): Promise<ScopedActivityPage> {
+  const take = Math.min(Math.max(query.take ?? ACTIVITY_PAGE_SIZE, 1), ACTIVITY_EXPORT_LIMIT);
+  const cursor = readCursor(query.cursor);
   const rows = await prisma.activityEvent.findMany({
-    where: { workspaceId: ctx.workspace.id },
-    orderBy: { occurredAt: "desc" },
-    take: limit,
-    select: activitySelect,
+    where: {
+      workspaceId: ctx.workspace.id,
+      project: { ...visibleProjectsWhere(ctx), ...(query.projectId ? { id: query.projectId } : {}) },
+      ...(query.actorId ? { actorUserId: query.actorId } : {}),
+      ...(query.action ? { action: query.action } : {}),
+      ...(query.from || query.to
+        ? {
+            occurredAt: {
+              ...(query.from ? { gte: parseCalendarDate(query.from) } : {}),
+              ...(query.to ? { lt: parseCalendarDate(addCalendarDays(query.to, 1)) } : {}),
+            },
+          }
+        : {}),
+      ...(query.issueType || query.issueNumber
+        ? { issue: { ...(query.issueType ? { type: query.issueType } : {}), ...(query.issueNumber ? { number: query.issueNumber } : {}) } }
+        : {}),
+      ...(cursor
+        ? {
+            OR: [
+              { occurredAt: { lt: cursor.occurredAt } },
+              { occurredAt: cursor.occurredAt, id: { lt: cursor.id } },
+            ],
+          }
+        : {}),
+    },
+    orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
+    take: take + 1,
+    select: { ...activitySelect, actorUserId: true },
   });
-  return rows.map((row) => toView(row));
+  const page = rows.slice(0, take);
+  const last = page.at(-1);
+  return {
+    rows: page.map((row) => ({ ...toView(row), actorId: row.actorUserId })),
+    nextCursor: rows.length > take && last ? activityCursor(last.occurredAt, last.id) : null,
+  };
 }

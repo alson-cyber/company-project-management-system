@@ -188,6 +188,36 @@ Inbox relevance, and only these:
 
 Priority edits, description edits, labels, criteria, attachments and health changes do not create inbox items.
 
+### 5.3 Executive command centre and reports
+
+Executive is company-wide management visibility. It is not Administration, and it does not grant destructive configuration powers.
+
+| Surface | Who | Scope |
+|---|---|---|
+| `/executive` and `/executive/activity` | Executive grant only | Every non-archived project. A Member, a Project Lead without the Executive grant, and an Admin do not gain this by role. Direct access without the grant is not found. |
+| `/reports` | Any signed-in member | Only projects `visibleProjectsWhere` already allows. Executive sees the company. Admin sees a project only when they are a member of it. |
+| CSV export | Same as the report on screen | Generated on the server from the same queries. A project the caller cannot see is absent, not blanked after the fact. |
+
+Management attention is a list of sentences. It is not a health score and it never writes the Health field.
+
+| Signal | Rule |
+|---|---|
+| Overdue Highest | At least one open executable item is Highest priority and overdue. |
+| Overdue cluster | Three or more open executable items are overdue. |
+| Target approaching | Project is Active or On hold, target is today through 14 days later, and at least three executable items are still open. |
+| Review backlog | Three or more executable items are In Review. |
+| Target passed | Project is Active and the target date is before today. |
+| At risk / Blocked | The stored lead-set Health label is At risk or Blocked. The label is repeated, not calculated. |
+| Stalled | An open executable item whose last update is 14 or more company calendar days ago. |
+
+Overdue, executable work and derived progress use the same definitions as Project Overview (§1.3, §1.1). Completed recently on the Executive overview is executable work whose current `completedAt` falls in the last 14 calendar days (§5.2). Completion trend and contribution evidence use `issue.completed` activity instead, so reopening or reassignment does not move historical credit (§6).
+
+Master activity is the existing append-only `activity_events` table, filtered and paged (40 per page, newest first, cursor on time and id). Exports of activity and completion evidence are capped at 1,000 matching rows. Company calendar dates use `COMPANY_TIMEZONE`, not the browser zone.
+
+Reports: Project progress, Work by status, Overdue work, Priority attention (open High and Highest), Work by assignee (alphabetical), Completion trend, Activity, Issue type distribution. Filters live in the URL. Current-state reports do not require a date range. Completion and activity reports default to the last 30 days, with 7, 90 and custom windows.
+
+Direct AI-agent execution remains **Future / Optional — Not Current Scope** (§8).
+
 ## 6. Contribution-reporting principles
 
 Contribution reporting shows **factual evidence of work**. It is not a performance evaluation.
