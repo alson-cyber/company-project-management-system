@@ -9,6 +9,7 @@ import { getVisibleIssueByNumber, listAssignableMembers, listProjectIssueTree } 
 import { getVisibleProjectByKey } from "@/modules/projects/project.queries";
 import { hasProjectPermission } from "@/server/access/policy";
 import { requireAuthContext } from "@/server/access/session";
+import { visibleProject } from "../../guard";
 
 export async function generateMetadata({
   params,
@@ -16,8 +17,9 @@ export async function generateMetadata({
   params: Promise<{ projectKey: string; issueNumber?: string[] }>;
 }): Promise<Metadata> {
   const { projectKey, issueNumber } = await params;
+  const { project } = await visibleProject(projectKey);
   const number = issueNumber?.[0];
-  return { title: number ? `${projectKey.toUpperCase()}-${number}` : `${projectKey.toUpperCase()} issues` };
+  return { title: number ? `${project.key}-${number}` : `${project.key} issues` };
 }
 
 export default async function ProjectIssuesPage({

@@ -22,6 +22,8 @@ export const auth = betterAuth({
   // Sign-in rate limiting is for production. Local tests log in many times in one run.
   rateLimit: { enabled: env.NODE_ENV === "production" },
   advanced: {
+    // Secure cookies when the public origin is HTTPS. Local HTTP development stays usable.
+    useSecureCookies: env.BETTER_AUTH_URL.startsWith("https://"),
     database: {
       // Prisma requires `id` on create; generate it before the adapter writes.
       generateId: () => crypto.randomUUID(),

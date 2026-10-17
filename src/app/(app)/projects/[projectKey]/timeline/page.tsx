@@ -8,10 +8,11 @@ import { timelineRows, timelineWindow } from "@/modules/projects/workspace.model
 import { listProjectWorkspaceIssues } from "@/modules/projects/workspace.queries";
 import { requireAuthContext } from "@/server/access/session";
 import { getEnv } from "@/server/env";
+import { visibleProject } from "../guard";
 
 export async function generateMetadata({ params }: { params: Promise<{ projectKey: string }> }): Promise<Metadata> {
-  const { projectKey } = await params;
-  return { title: `${projectKey.toUpperCase()} · Timeline` };
+  const { project } = await visibleProject((await params).projectKey);
+  return { title: `${project.key} · Timeline` };
 }
 
 export default async function TimelinePage({ params }: { params: Promise<{ projectKey: string }> }) {

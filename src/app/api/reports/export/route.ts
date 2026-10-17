@@ -9,6 +9,7 @@ import { PROJECT_HEALTH_LABELS } from "@/modules/projects/project.constants";
 import { getActionAuthContext } from "@/server/access/session";
 import { getEnv } from "@/server/env";
 import { UnauthenticatedError } from "@/server/errors";
+import { consumeRateLimit, tooManyRequests } from "@/server/security/rate-limit";
 
 const EXPORTS = ["progress", "overdue", "activity", "contributions"] as const;
 type ExportId = (typeof EXPORTS)[number];
@@ -16,6 +17,8 @@ type ExportId = (typeof EXPORTS)[number];
 export async function GET(request: Request) {
   try {
     const ctx = await getActionAuthContext();
+    const limit = consumeRateLimit(`export:${ctx.userId}`, 20, 60_000);
+    if (!limit.ok) return tooManyRequests(limit.retryAfterSeconds);
     const url = new URL(request.url);
     const report = url.searchParams.get("report");
     if (!report || !(EXPORTS as readonly string[]).includes(report)) {

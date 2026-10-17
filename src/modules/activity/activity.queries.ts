@@ -192,7 +192,9 @@ function readCursor(cursor: string | undefined): { occurredAt: Date; id: string 
   if (split <= 0) return null;
   const occurredAt = new Date(cursor.slice(0, split));
   const id = cursor.slice(split + 1);
-  if (Number.isNaN(occurredAt.getTime()) || !id) return null;
+  if (Number.isNaN(occurredAt.getTime()) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    return null;
+  }
   return { occurredAt, id };
 }
 

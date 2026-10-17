@@ -8,10 +8,11 @@ import { getVisibleProjectByKey } from "@/modules/projects/project.queries";
 import { canPreviewAttachment, type AttachmentKind } from "@/modules/projects/workspace.model";
 import { listProjectFiles, type ProjectFileRow } from "@/modules/projects/workspace.queries";
 import { requireAuthContext } from "@/server/access/session";
+import { visibleProject } from "../guard";
 
 export async function generateMetadata({ params }: { params: Promise<{ projectKey: string }> }): Promise<Metadata> {
-  const { projectKey } = await params;
-  return { title: `${projectKey.toUpperCase()} · Files` };
+  const { project } = await visibleProject((await params).projectKey);
+  return { title: `${project.key} · Files` };
 }
 
 function first(value: string | string[] | undefined): string {

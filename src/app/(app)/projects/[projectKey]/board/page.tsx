@@ -16,10 +16,11 @@ import {
 import { listProjectWorkspaceIssues } from "@/modules/projects/workspace.queries";
 import { hasProjectPermission } from "@/server/access/policy";
 import { requireAuthContext } from "@/server/access/session";
+import { visibleProject } from "../guard";
 
 export async function generateMetadata({ params }: { params: Promise<{ projectKey: string }> }): Promise<Metadata> {
-  const { projectKey } = await params;
-  return { title: `${projectKey.toUpperCase()} · Board` };
+  const { project } = await visibleProject((await params).projectKey);
+  return { title: `${project.key} · Board` };
 }
 
 function first(value: string | string[] | undefined): string {
