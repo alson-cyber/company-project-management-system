@@ -28,11 +28,6 @@ function NavLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => void 
           <span className="sr-only"> unread</span>
         </span>
       ) : null}
-      {item.upcoming ? (
-        <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-nav-muted ring-1 ring-white/10">
-          Soon
-        </span>
-      ) : null}
     </Link>
   );
 }

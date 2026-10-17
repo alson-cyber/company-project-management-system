@@ -13,22 +13,14 @@ const credentialsSchema = z.object({
 
 type FieldName = keyof z.infer<typeof credentialsSchema>;
 
-export interface DevAccount {
-  name: string;
-  email: string;
-  description: string;
-}
-
 export function LoginForm({
   redirectTo,
   passwordEnabled,
   sso,
-  devAccounts,
 }: {
   redirectTo: string;
   passwordEnabled: boolean;
   sso: { providerId: string; displayName: string } | null;
-  devAccounts: DevAccount[];
 }) {
   const id = useId();
   const [email, setEmail] = useState("");
@@ -149,33 +141,6 @@ export function LoginForm({
             )}
           </Button>
         </form>
-      ) : null}
-
-      {devAccounts.length > 0 && passwordEnabled ? (
-        <details className="rounded-lg border border-dashed border-line-strong bg-surface-2 px-4 py-3 text-[13px]">
-          <summary className="cursor-pointer font-semibold text-ink">Development accounts</summary>
-          <p className="mt-2 text-muted">
-            Local development only. The password for every account is the <code>SEED_DEV_PASSWORD</code> value in
-            your <code>.env</code>.
-          </p>
-          <ul className="mt-2 grid gap-1">
-            {devAccounts.map((account) => (
-              <li key={account.email}>
-                <button
-                  type="button"
-                  className="flex w-full items-baseline justify-between gap-3 rounded-md px-2 py-1.5 text-left hover:bg-surface-3"
-                  onClick={() => {
-                    setEmail(account.email);
-                    document.getElementById(passwordId)?.focus();
-                  }}
-                >
-                  <span className="font-medium text-ink">{account.name}</span>
-                  <span className="text-xs text-muted">{account.description}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </details>
       ) : null}
     </div>
   );

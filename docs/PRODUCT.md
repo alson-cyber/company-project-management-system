@@ -3,6 +3,8 @@
 > **Source of truth:** [`PRODUCT-RULES.md`](PRODUCT-RULES.md). If this file disagrees with it, `PRODUCT-RULES.md` wins.
 >
 > **Future / Optional — Not Current Scope:** Direct AI-agent execution through the PMS is excluded from the current product. Do not implement agent orchestration, runners, queues or agent identities.
+>
+> The hierarchy, roles, notes, comments, attachments, activity, board, timeline, inbox, executive view and reports described here are implemented. Sprints, story points and custom workflows are not.
 
 ## Goal
 

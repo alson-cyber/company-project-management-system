@@ -5,6 +5,8 @@ const dateTimeFormatter = new Intl.DateTimeFormat("en-GB", {
   year: "numeric",
   hour: "2-digit",
   minute: "2-digit",
+  hourCycle: "h23",
+  timeZone: "UTC",
 });
 
 export function toDate(value: Date | string | null | undefined): Date | null {
@@ -25,6 +27,7 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/** Clock times are shown in UTC so server and browser render the same string. */
 export function formatDateTime(value: Date | string | null | undefined): string {
   const date = toDate(value);
   return date ? dateTimeFormatter.format(date) : "—";

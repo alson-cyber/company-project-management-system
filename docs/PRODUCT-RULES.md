@@ -202,15 +202,15 @@ Management attention is a list of sentences. It is not a health score and it nev
 
 | Signal | Rule |
 |---|---|
-| Overdue Highest | At least one open executable item is Highest priority and overdue. |
-| Overdue cluster | Three or more open executable items are overdue. |
+| Overdue Highest | At least one open issue is Highest priority and overdue. A Task with Sub-tasks still counts when its own due date has passed. |
+| Overdue cluster | Three or more open issues are overdue. |
 | Target approaching | Project is Active or On hold, target is today through 14 days later, and at least three executable items are still open. |
 | Review backlog | Three or more executable items are In Review. |
 | Target passed | Project is Active and the target date is before today. |
 | At risk / Blocked | The stored lead-set Health label is At risk or Blocked. The label is repeated, not calculated. |
 | Stalled | An open executable item whose last update is 14 or more company calendar days ago. |
 
-Overdue, executable work and derived progress use the same definitions as Project Overview (§1.3, §1.1). Completed recently on the Executive overview is executable work whose current `completedAt` falls in the last 14 calendar days (§5.2). Completion trend and contribution evidence use `issue.completed` activity instead, so reopening or reassignment does not move historical credit (§6).
+An issue is overdue when its due date is before today in the company time zone and it is not Done. That is the same list Project Overview, the Board and the Overdue report use, including a Task that has Sub-tasks. Derived progress still counts executable work only (§1.1). Completed recently on the Executive overview is executable work whose current `completedAt` falls in the last 14 calendar days (§5.2). Completion trend and contribution evidence use `issue.completed` activity instead, so reopening or reassignment does not move historical credit (§6).
 
 Master activity is the existing append-only `activity_events` table, filtered and paged (40 per page, newest first, cursor on time and id). Exports of activity and completion evidence are capped at 1,000 matching rows. Company calendar dates use `COMPANY_TIMEZONE`, not the browser zone.
 

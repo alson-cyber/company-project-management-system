@@ -4,7 +4,7 @@ import { isOverdue } from "@/lib/calendar";
 import { progressOfProject } from "@/modules/issues/issue.progress";
 import { listScopedActivity } from "@/modules/activity/activity.queries";
 import { loadExecutivePortfolio, loadVisibleIssueFacts, loadVisiblePortfolio } from "@/modules/reporting/portfolio.queries";
-import { applyIssueFilters, executableFacts, overdueRows, statusCounts } from "@/modules/reporting/report.derive";
+import { applyIssueFilters, overdueRows, statusCounts } from "@/modules/reporting/report.derive";
 import { parseReportFilters } from "@/modules/reporting/reports.model";
 import { listVisibleCompletionEvidence } from "@/modules/reporting/trend.queries";
 import { toCsv } from "@/modules/reporting/csv";
@@ -46,13 +46,15 @@ describe("executive reporting", () => {
     const aquaIssues = issues.filter((issue) => issue.projectId === aqua?.id);
     const progress = progressOfProject(aquaIssues.map((issue) => ({ ...issue, archivedAt: null })));
     expect(aqua?.progress).toEqual(progress);
-    const executable = executableFacts(aquaIssues);
-    const overdue = executable.filter(
-      (issue) => issue.dueDate && isOverdue(new Date(`${issue.dueDate}T00:00:00.000Z`), issue.status, getEnv().COMPANY_TIMEZONE, at),
+    const overdue = aquaIssues.filter(
+      (issue) =>
+        issue.status !== "DONE" &&
+        issue.dueDate &&
+        isOverdue(new Date(`${issue.dueDate}T00:00:00.000Z`), issue.status, getEnv().COMPANY_TIMEZONE, at),
     );
     expect(aqua?.overdue).toBe(overdue.length);
     expect(overdueRows(aquaIssues, portfolio, getEnv().COMPANY_TIMEZONE, at)).toHaveLength(overdue.length);
-    expect(aqua?.highestOpen).toBe(executable.filter((issue) => issue.status !== "DONE" && issue.priority === "HIGHEST").length);
+    expect(aqua?.highestOpen).toBe(aquaIssues.filter((issue) => issue.status !== "DONE" && issue.priority === "HIGHEST").length);
     expect(aqua?.signals.every((signal) => signal.text.length > 0)).toBe(true);
   });
 

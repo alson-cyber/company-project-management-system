@@ -37,8 +37,8 @@ export function ProjectTimeline({
   }
 
   return (
-    <div className="grid gap-3">
-      <ul className="divide-y divide-line/70 md:hidden">
+    <div className="grid min-w-0 gap-3">
+      <ul className="min-w-0 divide-y divide-line/70 md:hidden">
         {visible.map((row) => (
           <li key={row.issue.id} className="py-2.5" style={{ paddingLeft: row.depth * 12 }}>
             <RowLabel projectKey={projectKey} row={row} collapsed={collapsed.has(row.issue.id)} onToggle={() => toggle(row.issue.id, collapsed, setCollapsed)} />
@@ -149,7 +149,7 @@ function RowLabel({
         <span className="size-6 shrink-0" aria-hidden="true" />
       )}
       <IssueTypeBadge type={row.issue.type} />
-      <Link href={`/projects/${projectKey}/issues/${row.issue.number}`} className="truncate text-[13px] font-medium hover:underline">
+      <Link href={`/projects/${projectKey}/issues/${row.issue.number}`} className="min-w-0 flex-1 truncate text-[13px] font-medium hover:underline">
         <span className="mr-1 font-mono text-xs text-muted">{row.issue.key}</span>
         {row.issue.title}
       </Link>

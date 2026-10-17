@@ -52,7 +52,7 @@ export function ProjectBoard({
   }
 
   return (
-    <div className="grid gap-4">
+    <div className="grid min-w-0 gap-4">
       {error ? (
         <p role="alert" className="text-sm font-medium text-danger">
           {error}
@@ -64,7 +64,7 @@ export function ProjectBoard({
       {groups.map((group) => (
         <section key={group.id} aria-label={group.title ?? "Board"} className="grid gap-2">
           {group.title ? <h2 className="text-sm font-semibold">{group.title}</h2> : null}
-          <div className="flex gap-3 overflow-x-auto pb-2">
+          <div className="flex min-w-0 max-w-full gap-3 overflow-x-auto pb-2 [contain:inline-size]">
             {BOARD_COLUMNS.map((status) => {
               const column = group.cards.filter((card) => card.status === status);
               const dropId = `${group.id}:${status}`;
@@ -130,7 +130,7 @@ function BoardCardView({
       }}
       className="grid gap-1.5 border border-line bg-surface px-3 py-2.5 focus-within:border-accent"
     >
-      {context ? <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-muted">{context}</p> : null}
+      {context ? <p className="truncate text-[11px] font-medium text-muted">{context}</p> : null}
       <p className="font-mono text-xs font-semibold text-muted">{card.key}</p>
       <h3 className="text-sm font-medium leading-snug">{card.title}</h3>
       {card.parentTitle ? <p className="truncate text-xs text-muted">In {card.parentTitle}</p> : null}

@@ -21,7 +21,7 @@ export type ProjectSection = (typeof TABS)[number]["id"];
 export function ProjectWorkspaceHeader({ project, current }: { project: ProjectDetail; current: ProjectSection }) {
   const shown = project.members.slice(0, 4);
   return (
-    <div className="mb-4">
+    <div className="mb-4 min-w-0">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h1 className="sr-only">{project.name}</h1>
@@ -51,7 +51,7 @@ export function ProjectWorkspaceHeader({ project, current }: { project: ProjectD
           <ProjectRoleBadge role={project.viewerRole} />
         </div>
       </div>
-      <nav aria-label="Project sections" className="mt-3 flex gap-1 overflow-x-auto border-b border-line">
+      <nav aria-label="Project sections" className="mt-3 flex min-w-0 gap-1 overflow-x-auto border-b border-line">
         {TABS.map((tab) => (
           <Tab key={tab.id} href={tab.href(project.key)} current={current === tab.id}>
             {tab.label}
@@ -64,7 +64,7 @@ export function ProjectWorkspaceHeader({ project, current }: { project: ProjectD
 
 function Tab({ href, current, children }: { href: string; current: boolean; children: string }) {
   const className = cn(
-    "border-b-2 px-3 py-2.5 text-[13px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
+    "shrink-0 border-b-2 px-3 py-2.5 text-[13px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
     current ? "border-accent font-semibold text-ink" : "border-transparent text-muted hover:text-ink",
   );
   if (current) {

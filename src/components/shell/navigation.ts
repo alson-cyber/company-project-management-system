@@ -4,8 +4,6 @@ export interface NavItem {
   href: string;
   label: string;
   icon: IconName;
-  /** Shown as a quiet "Soon" tag: the page exists but its feature is not built yet. */
-  upcoming?: boolean;
   /** Unread count. Zero is omitted. */
   badge?: number;
 }
