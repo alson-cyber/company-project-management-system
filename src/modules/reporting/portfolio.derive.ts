@@ -76,7 +76,10 @@ export function derivePortfolio(
     const nodes = rows.map(asNode);
     const executable = rows.filter((issue) => isExecutable(asNode(issue), nodes));
     const open = executable.filter((issue) => issue.status !== "DONE");
-    const overdue = open.filter((issue) => isOverdue(issue.dueDate ? new Date(`${issue.dueDate}T00:00:00.000Z`) : null, issue.status, timeZone, at));
+    const openIssues = rows.filter((issue) => issue.status !== "DONE");
+    const overdue = openIssues.filter((issue) =>
+      isOverdue(issue.dueDate ? new Date(`${issue.dueDate}T00:00:00.000Z`) : null, issue.status, timeZone, at),
+    );
     const progress = progressOfProject(nodes);
     const targetDay = project.targetDate ? calendarDayUtc(project.targetDate) : null;
     return {
@@ -86,7 +89,7 @@ export function derivePortfolio(
       openExecutable: open.length,
       doneExecutable: executable.filter((issue) => issue.status === "DONE").length,
       overdue: overdue.length,
-      highestOpen: open.filter((issue) => issue.priority === "HIGHEST").length,
+      highestOpen: openIssues.filter((issue) => issue.priority === "HIGHEST").length,
       highOpen: open.filter((issue) => issue.priority === "HIGH").length,
       inReview: open.filter((issue) => issue.status === "IN_REVIEW").length,
       signals: managementSignals({

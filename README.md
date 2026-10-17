@@ -1,43 +1,30 @@
 # Workhub — Internal Project Management System
 
-Company project management with Jira-level structure and a calmer Linear/Notion-like workspace.
+Internal company software for managing delivery. A project breaks down as **Project → Epic → User Story → Task → Sub-task**. People collaborate with notes, comments and files, follow work on a board and a timeline, and management reads the same facts in the Executive Command Centre and reports.
 
-The mandatory hierarchy is **Project → Epic → User Story → Task → Sub-task**. Direct AI-agent execution is out of current scope. Product rules live in [`docs/PRODUCT-RULES.md`](docs/PRODUCT-RULES.md).
-
-## Current stage
-
-**Core PMS domain.** The app is a real Next.js application with PostgreSQL, Prisma migrations, database-backed sessions, roles, project membership, and the Issue hierarchy (Epic → User Story → Task → Sub-task). Board, timeline, attachments, inbox and reports are not built yet.
-
-Authoritative documents:
-
-- [`docs/PRODUCT-RULES.md`](docs/PRODUCT-RULES.md) — binding product rules
-- [`docs/ARCHITECTURE-PLAN.md`](docs/ARCHITECTURE-PLAN.md) — production architecture
-- [`docs/MIGRATION-PLAN.md`](docs/MIGRATION-PLAN.md) — staged migration
-- [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md) — audit of the original prototype
-- [`docs/ISSUE-DOMAIN.md`](docs/ISSUE-DOMAIN.md) — issue keys, progress, archive, activity
-
-The Checkpoint 0.5 clickable prototype is preserved in [`prototype/`](prototype/) for visual comparison. It is not the running product.
+Direct AI-agent execution is **future / optional** and is not part of this system. Binding rules are in [`docs/PRODUCT-RULES.md`](docs/PRODUCT-RULES.md). Security controls are in [`docs/SECURITY.md`](docs/SECURITY.md). What must be true before a real deployment is in [`docs/LAUNCH-READINESS.md`](docs/LAUNCH-READINESS.md).
 
 ## Architecture
 
-Modular monolith:
+One Next.js application and one PostgreSQL database.
 
-- Next.js App Router (Node runtime) and TypeScript strict
-- PostgreSQL 17 via Docker Compose
-- Prisma ORM and SQL migrations
-- Zod at every server boundary
-- Better Auth with database sessions (email/password in development; generic OIDC when configured)
-- Server-side authorization in `src/server/access`
-- Local filesystem or S3-compatible object storage behind one interface (attachments come later)
-- Append-only `activity_events` (application only inserts; a database trigger rejects updates and deletes)
+- Next.js App Router, React, TypeScript
+- PostgreSQL via Prisma and SQL migrations
+- Better Auth sessions (email and password for provisioned users; optional OpenID Connect)
+- Server-side roles: Member, Project Lead, Admin, Executive
+- Zod validation on server inputs
+- Object storage for attachments (`local` in development, S3-compatible when configured)
+- Append-only `activity_events`
+
+The Checkpoint 0.5 prototype in [`prototype/`](prototype/) is a visual reference only. It is not the running product.
 
 ## Prerequisites
 
-- Node.js 22+
-- pnpm 10+
-- Docker (for PostgreSQL)
+- Node.js 22 or newer
+- pnpm 10 or newer (the repo pins pnpm 12)
+- Docker, for PostgreSQL
 
-## Setup
+## Local setup
 
 ```bash
 cp .env.example .env
@@ -49,73 +36,90 @@ pnpm db:seed
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000). Use one development server. Playwright uses port 3100 and must not run at the same time as `pnpm dev` in this directory.
+
+### Database
+
+`pnpm db:up` starts PostgreSQL from Docker Compose and publishes it on `127.0.0.1:55432` (override with `PMS_POSTGRES_PORT`).
+
+| Database | Used by |
+| --- | --- |
+| `pms_dev` | `pnpm dev`, seed, local use |
+| `pms_test` | `pnpm test:integration` and `pnpm test:e2e` |
+
+Integration and Playwright reset and seed `pms_test` only. They refuse to run if the test database is the same as the development database. Do not point `TEST_DATABASE_URL` at `pms_dev`.
 
 ### Environment
 
-Every variable is documented in `.env.example` and validated by `src/server/env.ts`. Do not commit `.env`.
+Every variable is documented in `.env.example` and checked by `src/server/env.ts`. Do not commit `.env`.
 
 | Variable | Purpose |
-|---|---|
-| `DATABASE_URL` | PostgreSQL connection (matches Docker Compose) |
-| `TEST_DATABASE_URL` | Separate database for integration tests |
-| `BETTER_AUTH_SECRET` | Session signing secret (≥ 32 characters) |
-| `BETTER_AUTH_URL` | Public origin, e.g. `http://localhost:3000` |
+| --- | --- |
+| `DATABASE_URL` | Development PostgreSQL connection |
+| `TEST_DATABASE_URL` | Isolated database for tests |
+| `BETTER_AUTH_SECRET` | Session signing secret, at least 32 characters |
+| `BETTER_AUTH_URL` | Public origin, `http://localhost:3000` locally |
+| `AUTH_PASSWORD_LOGIN_ENABLED` | Email and password for provisioned users |
 | `SEED_DEV_PASSWORD` | Shared password for seeded development users |
-| `ATTACHMENT_MAX_BYTES` | Attachment size limit (default 26214400 = 25 MB) |
-| `COMPANY_TIMEZONE` | IANA zone used for “today” when deciding overdue (default `UTC`) |
+| `COMPANY_TIMEZONE` | IANA zone used to decide “today” and overdue |
 | `STORAGE_DRIVER` | `local` or `s3` |
-| `AUTH_OIDC_*` | Optional company SSO. Leave blank until the identity provider is chosen. |
+| `STORAGE_LOCAL_DIR` | Local attachment directory when the driver is `local` |
+| `ATTACHMENT_MAX_BYTES` | Upload limit, default 25 MB |
+| `AUTH_OIDC_*` | Optional company SSO. Leave blank until a provider is chosen. |
 
-Docker Compose publishes Postgres on `127.0.0.1:55432` so it does not collide with a local Postgres on 5432. Override with `PMS_POSTGRES_PORT`.
+A non-localhost production origin refuses the local database credential and placeholder auth secrets. See [`docs/SECURITY.md`](docs/SECURITY.md).
 
-## Development sign-in
+### Object storage
 
-Sign-up is disabled. Use a seeded account and `SEED_DEV_PASSWORD` from `.env` (default in `.env.example`: `workhub-dev-only-pass`). These are local development credentials, not company accounts.
+Development stores attachment bytes under `STORAGE_LOCAL_DIR` (default `.data/storage`). The database stores metadata and a generated object key, never the user’s path. Set `STORAGE_DRIVER=s3` and the `S3_*` variables for an S3-compatible bucket.
+
+## Development accounts
+
+Sign-up is disabled. Seeded accounts exist only for local development. The password is `SEED_DEV_PASSWORD` in `.env` (the example value is `workhub-dev-only-pass`). The login screen does not list these accounts.
 
 | Email | Access |
-|---|---|
-| `alson.chen@workhub.test` | Executive (also lead of PMS) |
-| `sarah.kim@workhub.test` | Project lead of AquaDesk |
-| `alex.noor@workhub.test` | Member (engineer) |
-| `mika.ross@workhub.test` | Member (designer) |
-| `emma.davis@workhub.test` | Member (QA) |
-| `omar.haleem@workhub.test` | Admin, not a project member |
-| `lina.farah@workhub.test` | Deactivated — cannot sign in |
+| --- | --- |
+| `alson.chen@workhub.test` | Executive, and Project Lead of Internal PMS |
+| `sarah.kim@workhub.test` | Project Lead of AquaDesk, member of SignVeli |
+| `alex.noor@workhub.test` | Member of AquaDesk and Internal PMS; Project Lead of SignVeli and AIB Portal |
+| `mika.ross@workhub.test` | Member of AquaDesk and SignVeli |
+| `emma.davis@workhub.test` | Member of AquaDesk, AIB Portal and Internal PMS |
+| `omar.haleem@workhub.test` | Admin, not a member of any project |
+| `lina.farah@workhub.test` | Deactivated. Cannot sign in. |
 
-The login screen lists these accounts in development only.
+## Roles
 
-Future company SSO is plugged in by setting all `AUTH_OIDC_*` variables (any OpenID Connect provider). The login screen then shows a single real “Continue with …” button. Do not add vendor-specific buttons until that provider is configured.
+- **Member** — project content only where they belong.
+- **Project Lead** — manage their project, including health and membership.
+- **Admin** — administration and creating projects. No automatic project content.
+- **Executive** — company-wide read of delivery, activity and reports. No automatic write access and no administration.
 
-## Tests
+An Executive who is also a member of a project may collaborate there.
+
+## Tests and build
 
 ```bash
-pnpm test:unit
-pnpm test:integration   # requires `pnpm db:up`
-pnpm test:e2e           # Playwright on port 3100, using pms_test only
 pnpm lint
 pnpm typecheck
+pnpm test:unit
+pnpm test:integration
+pnpm test:e2e
 pnpm build
 ```
 
-End-to-end tests start their own app on port 3100 and point that process at `TEST_DATABASE_URL` (`pms_test`). They reset and re-seed that database before the run. They do not write to `pms_dev`. The run fails if an issue titled `E2E …` is found in the development database afterward.
-
-## Prototype (visual reference)
-
-```bash
-pnpm prototype
-```
-
-Then open [http://localhost:4173](http://localhost:4173). See [`prototype/README.md`](prototype/README.md).
+`pnpm test:integration` and `pnpm test:e2e` need `pnpm db:up`. End-to-end tests start their own app on port 3100 against `pms_test`.
 
 ## Scripts
 
 | Command | What it does |
-|---|---|
-| `pnpm db:up` | Start PostgreSQL (health-checked) |
-| `pnpm db:down` | Stop PostgreSQL (volume is kept) |
+| --- | --- |
+| `pnpm dev` | Development server on port 3000 |
+| `pnpm build` / `pnpm start` | Production build and server |
+| `pnpm db:up` / `pnpm db:down` | Start or stop PostgreSQL. The volume is kept. |
 | `pnpm db:deploy` | Apply migrations |
-| `pnpm db:seed` | Seed development users, projects and issues |
-| `pnpm db:reset` | Drop, migrate, seed (destroys local data) |
+| `pnpm db:seed` | Seed development users, projects and issues. Refuses `NODE_ENV=production`. |
+| `pnpm db:reset` | Drop, migrate and seed. Destroys local data. |
 | `pnpm db:studio` | Prisma Studio |
-| `pnpm prototype` | Serve the preserved Checkpoint 0.5 UI |
+| `pnpm prototype` | Serve the old prototype on port 4173 |
+
+`scripts/remove-stray-example-project.ts` deletes only a project named Aquadesk with key EXAMPLE from `pms_dev`. It refuses every other database.

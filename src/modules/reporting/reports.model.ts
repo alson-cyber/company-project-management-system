@@ -39,19 +39,19 @@ export const REPORTS: ReportDefinition[] = [
   {
     id: "overdue",
     title: "Overdue work",
-    definition: "Open executable work whose due date is before today in the company time zone.",
+    definition: "Open work whose due date is before today in the company time zone. A Task with Sub-tasks is included when its own due date has passed.",
     usesDateRange: false,
   },
   {
     id: "priority",
     title: "Priority attention",
-    definition: "Open executable work at High or Highest priority.",
+    definition: "Open work at High or Highest priority, including a Task that has Sub-tasks.",
     usesDateRange: false,
   },
   {
     id: "assignees",
     title: "Work by assignee",
-    definition: "Open and done executable work grouped by the current assignee. Alphabetical. This is not a ranking.",
+    definition: "Open and done executable work grouped by the current assignee. Overdue counts every open issue with a due date before today. Alphabetical. This is not a ranking.",
     usesDateRange: false,
   },
   {

@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { signOutAction } from "@/app/actions/session";
-import { LoginForm, type DevAccount } from "@/app/login/login-form";
+import { LoginForm } from "@/app/login/login-form";
 import { BrandMark } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import { FormAlert } from "@/components/ui/field";
 import { safeRedirectPath } from "@/lib/safe-redirect";
-import { SEED_USERS } from "@/modules/dev/dev-fixtures";
 import { getSessionState } from "@/server/access/session";
 import { getSignInMethods } from "@/server/auth/sso";
 import { getEnv } from "@/server/env";
@@ -14,18 +13,6 @@ import { getEnv } from "@/server/env";
 export const metadata: Metadata = { title: "Sign in" };
 
 const HIERARCHY = ["Project", "Epic", "User Story", "Task", "Sub-task"] as const;
-
-function devAccounts(): DevAccount[] {
-  const describe = (user: (typeof SEED_USERS)[number]) => {
-    if (user.workspaceRoles.length > 0) return user.workspaceRoles.map((role) => role.toLowerCase()).join(", ");
-    return user.jobTitle;
-  };
-  return SEED_USERS.filter((user) => !("status" in user)).map((user) => ({
-    name: user.name,
-    email: user.email,
-    description: describe(user),
-  }));
-}
 
 export default async function LoginPage({
   searchParams,
@@ -72,7 +59,6 @@ export default async function LoginPage({
                 redirectTo={safeRedirectPath(next)}
                 passwordEnabled={methods.password}
                 sso={methods.sso}
-                devAccounts={env.NODE_ENV === "development" ? devAccounts() : []}
               />
             )}
           </div>

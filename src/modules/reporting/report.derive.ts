@@ -48,8 +48,8 @@ export function overdueRows(
 ): OverdueRow[] {
   const today = todayInTimeZone(timeZone, at);
   const byId = new Map(projects.map((project) => [project.id, project]));
-  return executableFacts(issues)
-    .filter((issue) => issue.dueDate && isOverdue(new Date(`${issue.dueDate}T00:00:00.000Z`), issue.status, timeZone, at))
+  return issues
+    .filter((issue) => issue.status !== "DONE" && issue.dueDate && isOverdue(new Date(`${issue.dueDate}T00:00:00.000Z`), issue.status, timeZone, at))
     .map((issue) => {
       const project = byId.get(issue.projectId);
       return {
@@ -91,7 +91,7 @@ export interface AssigneeRow {
 
 export function assigneeRows(issues: IssueFact[], timeZone: string, at: Date = new Date()): AssigneeRow[] {
   const rows = new Map<string, AssigneeRow>();
-  for (const issue of executableFacts(issues)) {
+  const rowFor = (issue: IssueFact) => {
     const key = issue.assigneeId ?? "";
     const row = rows.get(key) ?? {
       assigneeId: issue.assigneeId,
@@ -101,20 +101,28 @@ export function assigneeRows(issues: IssueFact[], timeZone: string, at: Date = n
       done: 0,
       overdue: 0,
     };
+    rows.set(key, row);
+    return row;
+  };
+  for (const issue of executableFacts(issues)) {
+    const row = rowFor(issue);
     if (issue.status === "DONE") row.done += 1;
     else {
       row.open += 1;
       if (issue.status === "IN_REVIEW") row.inReview += 1;
-      if (issue.dueDate && isOverdue(new Date(`${issue.dueDate}T00:00:00.000Z`), issue.status, timeZone, at)) row.overdue += 1;
     }
-    rows.set(key, row);
+  }
+  for (const issue of issues) {
+    if (issue.status === "DONE" || !issue.dueDate) continue;
+    if (!isOverdue(new Date(`${issue.dueDate}T00:00:00.000Z`), issue.status, timeZone, at)) continue;
+    rowFor(issue).overdue += 1;
   }
   return [...rows.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function priorityRows(issues: IssueFact[], projects: PortfolioProject[]): OverdueRow[] {
   const byId = new Map(projects.map((project) => [project.id, project]));
-  return executableFacts(issues)
+  return issues
     .filter((issue) => issue.status !== "DONE" && (issue.priority === "HIGH" || issue.priority === "HIGHEST"))
     .map((issue) => {
       const project = byId.get(issue.projectId);

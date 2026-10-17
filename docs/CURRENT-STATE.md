@@ -1,5 +1,7 @@
 # Current State Audit — Checkpoint 0.5 Starter
 
+> Historical. This audit describes the original browser prototype on 2026-10-15. The running product is the Next.js application in the repository root. Use the README, `PRODUCT-RULES.md` and `SECURITY.md` for what exists now.
+
 Audit date: 2026-10-15
 Branch audited: `feat/production-foundation` (identical to `main` at commit `1d8d5f6 chore: initialize company project management system`)
 Scope: every file in the repository was read. The prototype was served locally and loaded in a browser to confirm runtime behaviour.
