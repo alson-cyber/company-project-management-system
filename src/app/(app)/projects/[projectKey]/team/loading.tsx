@@ -1,3 +1,5 @@
+import { ListSkeleton } from "@/components/ui/skeleton";
+
 export default function LoadingTeam() {
-  return <p className="text-sm text-muted">Loading team…</p>;
+  return <ListSkeleton label="Loading team…" rows={5} />;
 }

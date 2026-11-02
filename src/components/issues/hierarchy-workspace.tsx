@@ -1,15 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useId, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { IssuePriority, IssueStatus, IssueType } from "@/generated/prisma/enums";
 import { CreateIssueForm } from "@/components/issues/create-issue-form";
+import { CREATE_EPIC_EVENT } from "@/components/shell/keyboard-shortcuts";
 import { Avatar } from "@/components/ui/avatar";
+import { EmptyState } from "@/components/ui/empty-state";
+import {
+  ISSUE_TYPE_STYLES,
+  IssueStatusDot,
+  IssueTypeIcon,
+  IssueTypeLegend,
+} from "@/components/ui/issue-badges";
 import { cn } from "@/components/ui/cn";
-import { Select } from "@/components/ui/field";
+import { ProgressRing } from "@/components/ui/progress-ring";
+import { formatDate } from "@/components/ui/format";
 import { calendarDayUtc } from "@/lib/calendar";
 import {
+  HIGH_PRIORITIES,
   ISSUE_PRIORITIES,
   ISSUE_PRIORITY_LABELS,
   ISSUE_STATUSES,
@@ -80,6 +90,14 @@ export function HierarchyWorkspace({
   children: ReactNode;
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // Bumping this remounts the "Create epic" form already open, for the C shortcut and the command palette.
+  const [createRequest, setCreateRequest] = useState(() => (searchParams.get("new") === "epic" ? 1 : 0));
+  useEffect(() => {
+    const requestCreate = () => setCreateRequest((count) => count + 1);
+    window.addEventListener(CREATE_EPIC_EVENT, requestCreate);
+    return () => window.removeEventListener(CREATE_EPIC_EVENT, requestCreate);
+  }, []);
   const selectedNumber = Number(pathname.match(/\/issues\/(\d+)\/?$/)?.[1] ?? "");
   const selectedId = Number.isInteger(selectedNumber) ? findSelectedId(tree, selectedNumber) : null;
   const expansion = useExpansion(projectId);
@@ -146,37 +164,60 @@ export function HierarchyWorkspace({
 
   return (
     <div className="flex h-[calc(100dvh-15rem)] min-h-[28rem] flex-col overflow-hidden rounded-[var(--radius-card)] border border-line bg-surface lg:flex-row">
-      <section className="flex min-w-0 flex-1 flex-col" aria-label="Issue hierarchy">
-        <div className="flex flex-wrap items-end gap-2 border-b border-line px-3 py-3" role="region" aria-label="Issue filters">
-          <label className="grid min-w-[12rem] flex-1 gap-1 text-xs font-medium text-muted">
-            Search issues
+      <section className="@container flex min-w-0 flex-1 flex-col" aria-label="Issue hierarchy">
+        <div
+          className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2.5"
+          role="region"
+          aria-label="Issue filters"
+        >
+          <label className="relative min-w-[10rem] flex-1">
+            <span className="sr-only">Search issues</span>
+            <svg
+              viewBox="0 0 16 16"
+              className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted"
+              aria-hidden="true"
+            >
+              <circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
+              <path d="m10.5 10.5 3 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
             <input
               value={filter.query}
               onChange={(event) => setFilter((current) => ({ ...current, query: event.target.value }))}
-              placeholder="Key or title"
-              className="h-9 rounded-lg border border-line bg-surface px-3 text-sm text-ink"
+              placeholder="Search by key or title"
+              className="h-8 w-full rounded-md border border-transparent bg-surface-2 pl-8 pr-3 text-sm text-ink transition-colors placeholder:text-muted-2 hover:border-line focus:border-line-strong focus:bg-surface"
             />
           </label>
           <FilterSelect
             label="Type"
+            anyLabel="All types"
             value={filter.type}
             onChange={(type) => setFilter((current) => ({ ...current, type: type as IssueType | "" }))}
             options={ISSUE_TYPES.map((type) => ({ value: type, label: ISSUE_TYPE_LABELS[type] }))}
           />
           <FilterSelect
             label="Status"
+            anyLabel="All statuses"
             value={filter.status}
-            onChange={(status) => setFilter((current) => ({ ...current, status: status as IssueStatus | "" }))}
+            onChange={(status) =>
+              setFilter((current) => ({ ...current, status: status as IssueStatus | "" }))
+            }
             options={ISSUE_STATUSES.map((status) => ({ value: status, label: ISSUE_STATUS_LABELS[status] }))}
           />
           <FilterSelect
             label="Priority"
+            anyLabel="All priorities"
             value={filter.priority}
-            onChange={(priority) => setFilter((current) => ({ ...current, priority: priority as IssuePriority | "" }))}
-            options={ISSUE_PRIORITIES.map((priority) => ({ value: priority, label: ISSUE_PRIORITY_LABELS[priority] }))}
+            onChange={(priority) =>
+              setFilter((current) => ({ ...current, priority: priority as IssuePriority | "" }))
+            }
+            options={ISSUE_PRIORITIES.map((priority) => ({
+              value: priority,
+              label: ISSUE_PRIORITY_LABELS[priority],
+            }))}
           />
           <FilterSelect
             label="Assignee"
+            anyLabel="Anyone"
             value={filter.assigneeId}
             onChange={(assigneeId) => setFilter((current) => ({ ...current, assigneeId }))}
             options={[
@@ -184,38 +225,89 @@ export function HierarchyWorkspace({
               ...members.map((member) => ({ value: member.id, label: member.name })),
             ]}
           />
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <button type="button" className="h-9 px-2 text-[13px] font-medium text-muted hover:text-ink" onClick={() => setAll(true)}>
-              Expand all
-            </button>
-            <button type="button" className="h-9 px-2 text-[13px] font-medium text-muted hover:text-ink" onClick={() => setAll(false)}>
-              Collapse all
-            </button>
-            {canMutate ? <CreateIssueForm projectId={projectId} type="EPIC" members={members} /> : null}
-          </div>
-        </div>
-        <p className="px-4 py-2 text-[13px] text-muted">
-          Project progress {progressPercent}% from executable work.
-          {filtering ? " Showing matches with their parent chain." : ""}
-        </p>
-        {filtering ? (
-          <div className="flex items-center gap-3 px-4 pb-2">
-            <p className="text-[13px] font-medium">Filters active</p>
+          {filtering ? (
             <button
               type="button"
-              className="text-[13px] font-medium text-accent-strong"
+              className="h-8 rounded-md px-2 text-[13px] font-medium text-muted hover:bg-surface-3 hover:text-ink"
               onClick={() => setFilter(EMPTY_ISSUE_FILTER)}
             >
               Reset
             </button>
+          ) : null}
+          <div className="ml-auto flex flex-wrap items-center gap-1">
+            <button
+              type="button"
+              aria-label="Expand all"
+              title="Expand all"
+              className="grid size-8 place-items-center rounded-md text-muted hover:bg-surface-3 hover:text-ink"
+              onClick={() => setAll(true)}
+            >
+              <svg viewBox="0 0 16 16" className="size-4" aria-hidden="true">
+                <path
+                  d="M4.5 6 8 2.5 11.5 6M4.5 10 8 13.5 11.5 10"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+            <button
+              type="button"
+              aria-label="Collapse all"
+              title="Collapse all"
+              className="grid size-8 place-items-center rounded-md text-muted hover:bg-surface-3 hover:text-ink"
+              onClick={() => setAll(false)}
+            >
+              <svg viewBox="0 0 16 16" className="size-4" aria-hidden="true">
+                <path
+                  d="M4.5 2.5 8 6l3.5-3.5M4.5 13.5 8 10l3.5 3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+            {canMutate ? (
+              <CreateIssueForm
+                key={createRequest}
+                projectId={projectId}
+                type="EPIC"
+                members={members}
+                defaultOpen={createRequest > 0}
+              />
+            ) : null}
           </div>
-        ) : null}
-        {visibleTree.length === 0 ? (
-          <p className="px-4 py-8 text-sm text-muted">
-            {tree.length === 0 ? "No issues in this project yet." : "No issues match these filters."}
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-2 text-[13px] text-muted">
+          <p>
+            Project progress {progressPercent}% from executable work.
+            {filtering ? " Showing matches with their parent chain." : ""}
           </p>
+          {filtering ? <p className="font-medium text-ink">Filters active</p> : <IssueTypeLegend />}
+        </div>
+        {visibleTree.length > 0 ? <ColumnHeader /> : null}
+        {visibleTree.length === 0 ? (
+          <EmptyState
+            title={tree.length === 0 ? "No issues in this project yet." : "No issues match these filters."}
+            illustration={tree.length === 0 ? "box" : undefined}
+          >
+            {tree.length === 0
+              ? canMutate
+                ? "Start by creating an epic, the big piece of work everything else sits under. Press C to begin."
+                : "When the team adds epics and stories, they appear here."
+              : "Try removing a filter, or reset them all."}
+          </EmptyState>
         ) : (
-          <ul role="tree" aria-label="Work breakdown" className="min-h-0 flex-1 overflow-auto pb-4" onKeyDown={onTreeKeyDown}>
+          <ul
+            role="tree"
+            aria-label="Work breakdown"
+            className="min-h-0 flex-1 overflow-auto pb-4"
+            onKeyDown={onTreeKeyDown}
+          >
             {rows.map((row, index) => (
               <TreeRow
                 key={row.node.id}
@@ -308,6 +400,13 @@ function TreeRow({
   onToggle: () => void;
 }) {
   const [creating, setCreating] = useState(false);
+  const done = node.status === "DONE";
+  // All the work underneath is finished but nobody has closed this item yet. Status never changes on its own.
+  const readyToClose =
+    !done &&
+    node.children.length > 0 &&
+    node.progress.total > 0 &&
+    node.progress.done === node.progress.total;
   return (
     <li
       role="treeitem"
@@ -320,10 +419,12 @@ function TreeRow({
     >
       <div
         className={cn(
-          "group flex min-h-10 items-center gap-2 border-b border-line/70 pr-2 text-sm",
+          "group flex min-h-10 items-center gap-2 border-b border-line/70 pr-2 text-sm transition-colors duration-150",
           selected
-            ? "bg-accent-soft shadow-[inset_2px_0_0_var(--color-accent)]"
-            : "hover:bg-surface-2 focus-within:bg-surface-2",
+            ? "bg-accent-soft shadow-[inset_3px_0_0_var(--color-accent)]"
+            : node.type === "EPIC"
+              ? cn(ISSUE_TYPE_STYLES.EPIC.soft, "hover:brightness-[0.98] focus-within:brightness-[0.98]")
+              : "hover:bg-surface-2 focus-within:bg-surface-2",
         )}
         style={{ paddingLeft: 12 + depth * 20 }}
       >
@@ -347,54 +448,112 @@ function TreeRow({
         ) : (
           <span className="size-6 shrink-0" />
         )}
-        <TypeMark type={node.type} />
-        <Link
-          href={`/projects/${projectKey}/issues/${node.number}`}
-          scroll={false}
-          tabIndex={tabIndex}
-          className="flex min-w-0 flex-1 items-baseline gap-2 rounded py-2 focus-visible:outline-offset-4"
+        <IssueTypeIcon type={node.type} className={done ? "opacity-50" : undefined} />
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <Link
+            href={`/projects/${projectKey}/issues/${node.number}`}
+            scroll={false}
+            tabIndex={tabIndex}
+            className="flex min-w-0 flex-1 items-baseline gap-2 rounded py-2 focus-visible:outline-offset-4"
+          >
+            <span className="shrink-0 font-mono text-xs text-muted">{node.key}</span>
+            <span
+              className={cn(
+                "min-w-0 truncate",
+                done
+                  ? "text-muted"
+                  : node.type === "EPIC"
+                    ? "font-semibold"
+                    : node.type === "SUB_TASK"
+                      ? "text-ink/85"
+                      : "font-medium",
+              )}
+            >
+              {node.title}
+            </span>
+          </Link>
+          {node.overdue ? (
+            <>
+              <span
+                className="size-2 shrink-0 rounded-full bg-danger @min-[48rem]:hidden"
+                title="Overdue"
+                aria-hidden="true"
+              />
+              <span className="sr-only @min-[48rem]:not-sr-only @min-[48rem]:shrink-0 @min-[48rem]:rounded-full @min-[48rem]:bg-danger-soft @min-[48rem]:px-2 @min-[48rem]:py-0.5 @min-[48rem]:text-[11px] @min-[48rem]:font-medium @min-[48rem]:text-danger">
+                Overdue
+              </span>
+            </>
+          ) : null}
+          {readyToClose ? (
+            <span
+              className="hidden shrink-0 rounded-full bg-success-soft px-2 py-0.5 text-[11px] font-medium text-success @min-[50rem]:inline"
+              title="Everything under this is done, but its own status is not Done yet."
+            >
+              Ready to close
+            </span>
+          ) : null}
+        </div>
+        <span
+          className={cn(
+            "inline-flex shrink-0 items-center gap-1.5 text-xs font-medium @min-[28rem]:w-28",
+            statusClass(node.status),
+          )}
         >
-          <span className="shrink-0 font-mono text-xs text-muted">{node.key}</span>
-          <span className="min-w-0 font-medium max-lg:truncate lg:whitespace-normal">{node.title}</span>
-        </Link>
-        <span className={cn("shrink-0 text-xs font-semibold", statusClass(node.status))}>{ISSUE_STATUS_LABELS[node.status]}</span>
-        <span className="hidden shrink-0 text-xs text-muted md:inline">{ISSUE_PRIORITY_LABELS[node.priority]}</span>
-        <span className="hidden shrink-0 lg:inline">
+          <IssueStatusDot status={node.status} className="size-1.5" />
+          {ISSUE_STATUS_LABELS[node.status]}
+        </span>
+        <span
+          className={cn(
+            "hidden w-20 shrink-0 text-xs @min-[36rem]:inline",
+            HIGH_PRIORITIES.has(node.priority) && !done ? "font-medium text-danger" : "text-muted",
+          )}
+        >
+          {HIGH_PRIORITIES.has(node.priority) && !done ? "▲ " : ""}
+          {ISSUE_PRIORITY_LABELS[node.priority]}
+        </span>
+        <span className="hidden w-28 shrink-0 items-center gap-1.5 @min-[54rem]:inline-flex">
           {node.assignee ? (
-            <Avatar name={node.assignee.name} size="sm" className="size-6 text-xs" />
+            <>
+              <Avatar name={node.assignee.name} size="sm" className="size-6 text-[10px]" />
+              <span className="truncate text-xs text-muted">{node.assignee.name.split(" ")[0]}</span>
+            </>
           ) : (
             <span className="text-xs text-muted-2">Unassigned</span>
           )}
         </span>
-        {node.dueDate ? (
-          <span
-            className={cn(
-              "shrink-0 text-xs",
-              node.overdue ? "font-semibold text-danger max-lg:hidden" : "hidden text-muted 2xl:inline",
-            )}
-          >
-            {node.overdue ? "Overdue" : calendarDayUtc(node.dueDate)}
-          </span>
-        ) : null}
-        {node.type === "EPIC" || node.type === "USER_STORY" ? (
-          <span className="hidden w-10 shrink-0 text-right text-xs tabular-nums text-muted md:inline">
-            {node.progress.total > 0 ? `${node.progress.percent}%` : ""}
-          </span>
-        ) : (
-          <span className="hidden w-10 md:inline" />
-        )}
-        {canMutate && node.allowedChildType ? (
-          <span className="shrink-0">
+        <span
+          className={cn(
+            "hidden w-24 shrink-0 text-xs tabular-nums @min-[62rem]:inline",
+            node.overdue ? "text-danger" : "text-muted",
+          )}
+        >
+          {node.dueDate ? formatDate(calendarDayUtc(node.dueDate)) : ""}
+        </span>
+        <span className="hidden w-20 shrink-0 items-center gap-1.5 @min-[44rem]:inline-flex">
+          {node.children.length > 0 && node.progress.total > 0 ? (
+            <>
+              <ProgressRing
+                percent={node.progress.percent}
+                label={`${node.progress.done} of ${node.progress.total} done`}
+              />
+              <span className="text-xs tabular-nums text-muted">
+                {node.progress.done}/{node.progress.total}
+              </span>
+            </>
+          ) : null}
+        </span>
+        <span className="w-7 shrink-0">
+          {canMutate && node.allowedChildType ? (
             <button
               type="button"
-              className="grid size-7 place-items-center rounded text-muted hover:bg-surface-3 hover:text-ink"
+              className="grid size-7 place-items-center rounded text-muted opacity-60 transition-opacity hover:bg-surface-3 hover:text-ink group-hover:opacity-100 focus-visible:opacity-100"
               aria-label={`Add ${ISSUE_TYPE_LABELS[node.allowedChildType]}`}
               onClick={() => setCreating((value) => !value)}
             >
               +
             </button>
-          </span>
-        ) : null}
+          ) : null}
+        </span>
       </div>
       {creating && node.allowedChildType ? (
         <div className="border-b border-line bg-surface-2 px-4 py-3" style={{ paddingLeft: 36 + depth * 20 }}>
@@ -412,68 +571,81 @@ function TreeRow({
   );
 }
 
-function Chevron({ open }: { open: boolean }) {
+/** Labels for the fixed columns, aligned with the cells in each row. */
+function ColumnHeader() {
   return (
-    <svg viewBox="0 0 16 16" className={cn("size-3.5 transition-transform", open ? "rotate-90" : "")} aria-hidden="true">
-      <path d="M6 3.5 11 8 6 12.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <div
+      aria-hidden="true"
+      className="hidden items-center gap-2 border-y border-line/70 bg-surface-2 py-1.5 pl-[70px] pr-2 text-[11px] font-semibold uppercase tracking-wide text-muted @min-[28rem]:flex"
+    >
+      <span className="flex-1">Work</span>
+      <span className="w-28 shrink-0">Status</span>
+      <span className="hidden w-20 shrink-0 @min-[36rem]:inline">Priority</span>
+      <span className="hidden w-28 shrink-0 @min-[54rem]:inline">Owner</span>
+      <span className="hidden w-24 shrink-0 @min-[62rem]:inline">Due</span>
+      <span className="hidden w-20 shrink-0 @min-[44rem]:inline">Progress</span>
+      <span className="w-7 shrink-0" />
+    </div>
   );
 }
 
-function TypeMark({ type }: { type: IssueType }) {
-  const tone =
-    type === "EPIC" ? "text-purple" : type === "USER_STORY" ? "text-teal" : type === "TASK" ? "text-accent" : "text-muted";
+function Chevron({ open }: { open: boolean }) {
   return (
-    <span className={cn("grid size-5 shrink-0 place-items-center", tone)} title={ISSUE_TYPE_LABELS[type]}>
-      <svg viewBox="0 0 16 16" className="size-4" aria-hidden="true">
-        {type === "EPIC" ? <path d="M8 1.5 14 8 8 14.5 2 8z" fill="currentColor" /> : null}
-        {type === "USER_STORY" ? <path d="M3 3.5h10v7.2L8 13.5 3 10.7z" fill="currentColor" /> : null}
-        {type === "TASK" ? <rect x="2.5" y="2.5" width="11" height="11" rx="2" fill="none" stroke="currentColor" strokeWidth="1.6" /> : null}
-        {type === "SUB_TASK" ? <rect x="4" y="4" width="8" height="8" rx="1.5" fill="currentColor" /> : null}
-      </svg>
-      <span className="sr-only">{ISSUE_TYPE_LABELS[type]}</span>
-    </span>
+    <svg
+      viewBox="0 0 16 16"
+      className={cn("size-3.5 transition-transform", open ? "rotate-90" : "")}
+      aria-hidden="true"
+    >
+      <path
+        d="M6 3.5 11 8 6 12.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
 function statusClass(status: IssueStatus): string {
   if (status === "DONE") return "text-success";
-  if (status === "IN_PROGRESS") return "text-accent-strong";
+  if (status === "IN_PROGRESS") return "text-info";
   if (status === "IN_REVIEW") return "text-warning";
   return "text-muted";
 }
 
 function FilterSelect({
   label,
+  anyLabel,
   value,
   options,
   onChange,
 }: {
   label: string;
+  anyLabel: string;
   value: string;
   options: Array<{ value: string; label: string }>;
   onChange: (value: string) => void;
 }) {
-  const id = useId();
   return (
-    <div className="grid gap-1">
-      <label htmlFor={id} className="text-xs font-medium text-muted">
-        {label}
-      </label>
-      <Select
-        id={id}
-        aria-label={label}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-9 w-[8.5rem] text-[13px]"
-      >
-        <option value="">Any</option>
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </Select>
-    </div>
+    <select
+      aria-label={label}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className={cn(
+        "h-8 max-w-[10rem] cursor-pointer rounded-full border px-3 text-[13px] transition-colors",
+        value
+          ? "border-accent/30 bg-accent-soft font-medium text-ink"
+          : "border-line bg-surface text-muted hover:border-line-strong hover:text-ink",
+      )}
+    >
+      <option value="">{anyLabel}</option>
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
   );
 }

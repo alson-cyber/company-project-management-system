@@ -14,16 +14,16 @@ function NavLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => void 
       onClick={onNavigate}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-sm transition-colors",
+        "flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors",
         active
-          ? "bg-nav-active text-white shadow-[inset_2px_0_0_#7fa2ff]"
-          : "text-nav-text hover:bg-white/5 hover:text-white",
+          ? "bg-nav-active font-medium text-ink"
+          : "text-nav-text hover:bg-nav-2 hover:text-ink",
       )}
     >
       <Icon name={item.icon} className="size-[17px] opacity-90" />
       <span className="flex-1 truncate">{item.label}</span>
       {item.badge ? (
-        <span className="min-w-5 rounded-full bg-white/15 px-1.5 text-center text-[11px] font-semibold tabular-nums text-white">
+        <span className="min-w-5 rounded-full bg-danger px-1.5 text-center text-[11px] font-semibold tabular-nums text-surface">
           {item.badge > 99 ? "99+" : item.badge}
           <span className="sr-only"> unread</span>
         </span>
@@ -81,8 +81,8 @@ export function SidebarNav({ navigation, onNavigate }: { navigation: ShellNaviga
                     onClick={onNavigate}
                     aria-current={active ? "page" : undefined}
                     className={cn(
-                      "flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-sm transition-colors",
-                      active ? "bg-nav-active text-white" : "text-nav-text hover:bg-white/5 hover:text-white",
+                      "flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors",
+                      active ? "bg-nav-active font-medium text-ink" : "text-nav-text hover:bg-nav-2 hover:text-ink",
                     )}
                   >
                     <span

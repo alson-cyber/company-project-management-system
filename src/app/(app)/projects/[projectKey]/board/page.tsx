@@ -129,7 +129,7 @@ function Filter({
   return (
     <label className="grid gap-1 text-xs font-medium text-muted">
       {label}
-      <select name={name} defaultValue={defaultValue} aria-label={label} className="h-10 min-w-36 border border-line bg-surface px-2 text-sm text-ink">
+      <select name={name} defaultValue={defaultValue} aria-label={label} className="h-10 min-w-36 rounded-md border border-line bg-surface px-2 text-sm text-ink">
         {children}
       </select>
     </label>

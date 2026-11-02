@@ -21,7 +21,7 @@ export function InboxBell({ count, items }: { count: number; items: BellItem[] }
       >
         <Icon name="inbox" className="size-4" />
         {count > 0 ? (
-          <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-accent px-1 text-center text-[10px] font-semibold leading-4 text-white">
+          <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-danger px-1 text-center text-[10px] font-semibold leading-4 text-surface">
             {count > 9 ? "9+" : count}
           </span>
         ) : null}

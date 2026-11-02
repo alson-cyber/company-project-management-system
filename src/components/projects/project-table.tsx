@@ -40,7 +40,7 @@ export function ProjectTable({ projects, showViewerRole = true }: { projects: Pr
         </thead>
         <tbody>
           {projects.map((project) => (
-            <tr key={project.id} className="border-b border-line/70 last:border-0 hover:bg-surface-2">
+            <tr key={project.id} className="border-b border-line/70 transition-colors duration-150 last:border-0 hover:bg-surface-2">
               <td className="max-w-[360px] px-5 py-3">
                 <Link href={`/projects/${project.key}`} className="block rounded-md focus-visible:outline-offset-4">
                   <ProjectIdentity project={project} />

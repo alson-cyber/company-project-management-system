@@ -1,3 +1,5 @@
+import { ListSkeleton } from "@/components/ui/skeleton";
+
 export default function MyWorkLoading() {
-  return <p className="text-sm text-muted">Loading your work…</p>;
+  return <ListSkeleton label="Loading your work…" />;
 }

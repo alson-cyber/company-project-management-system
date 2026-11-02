@@ -1,3 +1,5 @@
+import { ListSkeleton } from "@/components/ui/skeleton";
+
 export default function InboxLoading() {
-  return <p className="text-sm text-muted">Loading inbox…</p>;
+  return <ListSkeleton label="Loading inbox…" />;
 }

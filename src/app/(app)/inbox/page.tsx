@@ -1,3 +1,4 @@
+import { EmptyState } from "@/components/ui/empty-state";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { MarkAllRead, MarkRead } from "@/components/attention/inbox-controls";
@@ -48,7 +49,11 @@ export default async function InboxPage({
         <span className="text-xs text-muted">{unread === 0 ? "No unread" : `${unread} unread`}</span>
       </div>
       {items.length === 0 ? (
-        <p className="text-sm text-muted">{unreadOnly ? "No unread notifications." : "Your inbox is empty."}</p>
+        <div className="rounded-[var(--radius-card)] border border-line bg-surface shadow-card">
+          <EmptyState title={unreadOnly ? "No unread notifications." : "Your inbox is empty."} illustration="inbox">
+            When someone assigns you work, mentions you or something you follow changes, it shows up here.
+          </EmptyState>
+        </div>
       ) : null}
       <div className="grid gap-6">
         {groups.map((group) => (

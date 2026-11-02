@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ProjectTable } from "@/components/projects/project-table";
+import { ProjectCards } from "@/components/projects/project-cards";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
@@ -24,17 +24,17 @@ export default async function ProjectsPage() {
             : "Projects you are a member of."
         }
       />
-      <Card>
-        {projects.length === 0 ? (
-          <EmptyState title="No projects to show">
+      {projects.length === 0 ? (
+        <Card>
+          <EmptyState title="No projects to show" illustration="box">
             {hasWorkspacePermission(ctx, "admin.access")
               ? "Administrators manage projects from Administration; project content is visible to members."
               : "A project lead or administrator can add you to a project."}
           </EmptyState>
-        ) : (
-          <ProjectTable projects={projects} />
-        )}
-      </Card>
+        </Card>
+      ) : (
+        <ProjectCards projects={projects} />
+      )}
     </>
   );
 }

@@ -11,11 +11,11 @@ export type Tone = "gray" | "blue" | "green" | "yellow" | "red" | "purple" | "te
 
 const tones: Record<Tone, string> = {
   gray: "bg-surface-3 text-muted",
-  blue: "bg-accent-soft text-accent-strong",
+  blue: "bg-info-soft text-info",
   green: "bg-success-soft text-success",
   yellow: "bg-warning-soft text-warning",
   red: "bg-danger-soft text-danger",
-  "dark-red": "bg-danger text-white",
+  "dark-red": "bg-danger text-surface",
   purple: "bg-purple-soft text-purple",
   teal: "bg-teal-soft text-teal",
 };
@@ -24,7 +24,7 @@ export function Badge({ tone = "gray", children, className }: { tone?: Tone; chi
   return (
     <span
       className={cn(
-        "inline-flex h-[22px] items-center gap-1.5 whitespace-nowrap rounded-full px-2 text-xs font-semibold",
+        "inline-flex h-[22px] items-center gap-1.5 whitespace-nowrap rounded-full px-2 text-xs font-medium",
         tones[tone],
         className,
       )}
