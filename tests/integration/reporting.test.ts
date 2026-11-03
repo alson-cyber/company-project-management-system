@@ -6,7 +6,7 @@ import { listScopedActivity } from "@/modules/activity/activity.queries";
 import { loadExecutivePortfolio, loadVisibleIssueFacts, loadVisiblePortfolio } from "@/modules/reporting/portfolio.queries";
 import { applyIssueFilters, overdueRows, statusCounts } from "@/modules/reporting/report.derive";
 import { parseReportFilters } from "@/modules/reporting/reports.model";
-import { companyToday, listVisibleCompletionEvidence } from "@/modules/reporting/trend.queries";
+import { companyToday, completionTrend, listVisibleCompletionEvidence } from "@/modules/reporting/trend.queries";
 import { toCsv } from "@/modules/reporting/csv";
 import { getEnv } from "@/server/env";
 import { authContextFor, emails, testDb } from "./helpers";
@@ -138,4 +138,12 @@ describe("executive reporting", () => {
     expect(csv).toContain("AquaDesk");
     expect(csv).not.toContain("SignVeli");
   });
+});
+
+test("completion trend counts seeded completions without a type mismatch", async () => {
+  const executive = await authContextFor(emails.executive);
+  const filters = parseReportFilters({ range: "90" }, companyToday());
+  const projects = await testDb.project.findMany({ select: { id: true } });
+  const points = await completionTrend(executive, projects.map((project) => project.id), filters);
+  expect(points.reduce((sum, point) => sum + point.count, 0)).toBeGreaterThan(0);
 });
