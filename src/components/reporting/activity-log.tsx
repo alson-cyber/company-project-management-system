@@ -2,6 +2,7 @@ import Link from "next/link";
 import { activityActionLabel, activityChangeDetail, describeActivity } from "@/modules/activity/activity.format";
 import type { WorkspaceActivityEvent } from "@/modules/activity/activity.queries";
 import { formatDateTime } from "@/components/ui/format";
+import { ProjectName } from "@/components/projects/project-name";
 
 export function ActivityLog({
   rows,
@@ -26,7 +27,7 @@ export function ActivityLog({
                 <span>{activityActionLabel(event.action)}</span>
                 {event.project ? (
                   <Link href={`/projects/${event.project.key}`} className="hover:underline">
-                    {event.project.name}
+                    <ProjectName name={event.project.name} color={event.project.color} />
                   </Link>
                 ) : null}
                 {event.issue && event.project ? (

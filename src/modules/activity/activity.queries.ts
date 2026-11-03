@@ -18,7 +18,7 @@ const activitySelect = {
   before: true,
   after: true,
   actorUserId: true,
-  project: { select: { key: true, name: true } },
+  project: { select: { key: true, name: true, color: true } },
   actor: { select: { name: true } },
   issue: { select: { number: true, title: true } },
 } as const;
@@ -36,9 +36,9 @@ function toView(row: {
   after: unknown;
   actorUserId: string | null;
   actor: { name: string } | null;
-  project?: { key: string; name: string } | null;
+  project?: { key: string; name: string; color?: string | null } | null;
   issue: { number: number; title: string } | null;
-}): ProjectActivityRow & { project: { key: string; name: string } | null } {
+}): ProjectActivityRow & { project: { key: string; name: string; color?: string | null } | null } {
   const projectKey = row.project?.key;
   return {
     id: row.id,
@@ -190,7 +190,7 @@ export function isActivityAction(value: string): value is ActivityAction {
 }
 
 export interface WorkspaceActivityEvent extends ActivityEventView {
-  project: { key: string; name: string } | null;
+  project: { key: string; name: string; color?: string | null } | null;
   issue: { key: string; number: number; title: string } | null;
 }
 

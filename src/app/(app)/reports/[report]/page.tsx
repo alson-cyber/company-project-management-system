@@ -21,6 +21,7 @@ import { companyToday, completionTrend, listVisibleCompletionEvidence } from "@/
 import type { AuthContext } from "@/server/access/types";
 import { requireAuthContext } from "@/server/access/session";
 import { getEnv } from "@/server/env";
+import { ProjectName } from "@/components/projects/project-name";
 import { FilterApplyButton } from "@/components/ui/filter-fields";
 
 export async function generateMetadata({ params }: { params: Promise<{ report: string }> }): Promise<Metadata> {
@@ -249,7 +250,7 @@ function ProgressTable({ projects }: { projects: PortfolioProject[] }) {
             <tr key={project.id} className="border-b border-line/70 transition-colors hover:bg-surface-2">
               <td className="py-2.5">
                 <Link href={`/projects/${project.key}`} className="font-medium hover:underline">
-                  {project.name}
+                  <ProjectName name={project.name} color={project.color} />
                 </Link>
               </td>
               <td className="py-2.5">{project.health ? PROJECT_HEALTH_LABELS[project.health] : "Not set"}</td>

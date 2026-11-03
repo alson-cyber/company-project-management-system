@@ -14,6 +14,7 @@ import { loadVisibleIssueFacts, loadVisibleProjects } from "@/modules/reporting/
 import { derivePortfolio } from "@/modules/reporting/portfolio.derive";
 import { listWorkspacePeople } from "@/modules/people/people.queries";
 import { PROJECT_HEALTH_LABELS, PROJECT_STATUS_LABELS } from "@/modules/projects/project.constants";
+import { ProjectName } from "@/components/projects/project-name";
 import { requireWorkspacePermission } from "@/server/access/session";
 import { getEnv } from "@/server/env";
 
@@ -131,7 +132,7 @@ export default async function ExecutivePage() {
                 {attention.map((project) => (
                   <li key={project.id} className="rounded-xl border border-line bg-surface-2 p-3">
                     <Link href={`/projects/${project.key}`} className="text-sm font-semibold hover:underline">
-                      {project.name}
+                      <ProjectName name={project.name} color={project.color} />
                     </Link>
                     <ul className="mt-1 grid gap-1">
                       {project.signals.map((signal) => (
@@ -180,7 +181,7 @@ export default async function ExecutivePage() {
                       <tr key={project.id} className="border-b border-line/70 align-top">
                         <td className="py-3 pr-3">
                           <Link href={`/projects/${project.key}`} className="font-medium hover:underline">
-                            {project.name}
+                            <ProjectName name={project.name} color={project.color} />
                           </Link>
                           <div className="text-xs text-muted">
                             {project.key} · {PROJECT_STATUS_LABELS[project.status]}
@@ -221,7 +222,7 @@ export default async function ExecutivePage() {
                 {portfolio.map((project) => (
                   <li key={project.id} className="py-3 text-sm">
                     <Link href={`/projects/${project.key}`} className="font-semibold hover:underline">
-                      {project.name}
+                      <ProjectName name={project.name} color={project.color} />
                     </Link>
                     <p className="mt-1 text-muted">
                       {project.health ? PROJECT_HEALTH_LABELS[project.health] : "Not set"} ·{" "}
