@@ -84,8 +84,19 @@ function groupByDay(rows: ProjectActivityRow[], timeZone: string, today: string)
   return groups;
 }
 
+/** Same rounded box for every field. Fill, border and text are set explicitly so the browser's defaults never show through. */
 const fieldClass =
-  "h-9 w-full min-w-0 border-0 border-b border-line-strong bg-transparent px-0.5 text-sm text-ink outline-none transition-colors focus:border-ink";
+  "h-10 w-full min-w-0 appearance-none rounded-xl border border-line-strong bg-surface-2 px-3 text-sm text-ink placeholder:text-muted-2 outline-none transition-colors hover:border-muted-2 focus:border-accent focus:ring-3 focus:ring-accent/15 selection:bg-accent-soft";
+
+const labelClass = "grid gap-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-2";
+
+function Chevron() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted" fill="none" stroke="currentColor" strokeWidth="1.6">
+      <path d="M4 6l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 export default async function ActivityPage({
   params,
@@ -155,42 +166,51 @@ export default async function ActivityPage({
       <ProjectWorkspaceHeader project={project} current="activity" />
       <p className="mb-5 text-xs text-muted">Recorded changes for this project. This is history, not an inbox.</p>
 
-      <ReportFilterForm label="Activity filters" className="grid grid-cols-2 items-end gap-x-6 gap-y-4 border-b border-line pb-5 sm:grid-cols-3 lg:grid-cols-6">
-        <label className="grid gap-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-2">
+      <ReportFilterForm label="Activity filters" className="grid grid-cols-2 items-end gap-x-3 gap-y-4 border-b border-line pb-5 sm:grid-cols-3 lg:grid-cols-6">
+        <label className={labelClass}>
           Person
-          <select name="person" defaultValue={person} aria-label="Person" className={fieldClass}>
-            <option value="">Anyone</option>
-            {project.members.map((member) => (
-              <option key={member.userId} value={member.userId}>
-                {member.name}
-              </option>
-            ))}
-          </select>
+          <span className="relative block">
+            <select name="person" defaultValue={person} aria-label="Person" className={fieldClass}>
+              <option value="">Anyone</option>
+              {project.members.map((member) => (
+                <option key={member.userId} value={member.userId}>
+                  {member.name}
+                </option>
+              ))}
+            </select>
+            <Chevron />
+          </span>
         </label>
-        <label className="grid gap-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-2">
+        <label className={labelClass}>
           Action
-          <select name="action" defaultValue={action} aria-label="Action" className={fieldClass}>
-            <option value="">Any action</option>
-            {ACTIVITY_ACTIONS.map((item) => (
-              <option key={item} value={item}>
-                {activityActionLabel(item)}
-              </option>
-            ))}
-          </select>
+          <span className="relative block">
+            <select name="action" defaultValue={action} aria-label="Action" className={fieldClass}>
+              <option value="">Any action</option>
+              {ACTIVITY_ACTIONS.map((item) => (
+                <option key={item} value={item}>
+                  {activityActionLabel(item)}
+                </option>
+              ))}
+            </select>
+            <Chevron />
+          </span>
         </label>
-        <label className="grid gap-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-2">
+        <label className={labelClass}>
           Issue
           <input name="issue" defaultValue={issue} placeholder="e.g. AQUA-8" aria-label="Issue" className={fieldClass} />
         </label>
-        <label className="grid gap-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-2">
+        <label className={labelClass}>
           From
           <input name="from" type="date" defaultValue={from} aria-label="From" className={fieldClass} />
         </label>
-        <label className="grid gap-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-2">
+        <label className={labelClass}>
           To
           <input name="to" type="date" defaultValue={to} aria-label="To" className={fieldClass} />
         </label>
-        <button type="submit" className="h-9 justify-self-start text-[13px] font-semibold text-accent-strong underline-offset-4 hover:underline">
+        <button
+          type="submit"
+          className="h-10 w-full rounded-xl bg-accent px-4 text-[13px] font-semibold text-on-accent transition-opacity hover:opacity-90"
+        >
           Apply
         </button>
       </ReportFilterForm>
