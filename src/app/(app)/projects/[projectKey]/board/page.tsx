@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import type { IssuePriority } from "@/generated/prisma/enums";
 import { ProjectBoard } from "@/components/projects/project-board";
 import { ProjectWorkspaceHeader } from "@/components/projects/project-workspace-header";
-import { FilterSelect, filterLabelClass } from "@/components/ui/filter-fields";
+import { FilterSelect, filterLabelClass, FilterApplyButton } from "@/components/ui/filter-fields";
 import { ISSUE_PRIORITIES, ISSUE_PRIORITY_LABELS, ISSUE_TYPE_LABELS } from "@/modules/issues/issue.constants";
 import { getVisibleProjectByKey } from "@/modules/projects/project.queries";
 import {
@@ -98,9 +98,7 @@ export default async function BoardPage({
             </option>
           ))}
         </Filter>
-        <button type="submit" className="h-10 px-3 text-[13px] font-semibold text-accent-strong hover:underline">
-          Apply
-        </button>
+        <FilterApplyButton />
         {filtering || mode !== "none" ? (
           <a href={`/projects/${project.key}/board`} className="h-10 px-2 text-[13px] leading-10 text-muted hover:text-ink">
             Reset

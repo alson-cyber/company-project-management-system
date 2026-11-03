@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes, SelectHTMLAttributes } from "react";
+import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
 
 /** Caption above every filter field. */
 export const filterLabelClass = "grid gap-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-2";
@@ -28,4 +28,16 @@ export function FilterSelect({ className = "", children, ...props }: SelectHTMLA
 
 export function FilterInput({ className = "", ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={`${filterControlClass} ${className}`} />;
+}
+
+/** The one Apply button for filter forms: solid, same height and corners as the fields beside it. */
+export function FilterApplyButton({ children = "Apply" }: { children?: ReactNode }) {
+  return (
+    <button
+      type="submit"
+      className="h-10 w-full min-w-24 rounded-xl bg-accent px-4 text-[13px] font-semibold text-on-accent transition-opacity hover:opacity-90 sm:w-auto"
+    >
+      {children}
+    </button>
+  );
 }

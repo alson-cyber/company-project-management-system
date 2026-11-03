@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProjectIssueLink } from "@/components/projects/project-issue-link";
 import { ProjectWorkspaceHeader } from "@/components/projects/project-workspace-header";
-import { FilterInput, FilterSelect, filterLabelClass } from "@/components/ui/filter-fields";
+import { FilterInput, FilterSelect, filterLabelClass, FilterApplyButton } from "@/components/ui/filter-fields";
 import { formatBytes, formatDateTime } from "@/components/ui/format";
 import { getVisibleProjectByKey } from "@/modules/projects/project.queries";
 import { canPreviewAttachment, type AttachmentKind } from "@/modules/projects/workspace.model";
@@ -83,9 +83,7 @@ export default async function FilesPage({
             ))}
           </FilterSelect>
         </label>
-        <button type="submit" className="h-10 px-3 text-[13px] font-semibold text-accent-strong hover:underline">
-          Apply
-        </button>
+        <FilterApplyButton />
         {filtering ? (
           <a href={`/projects/${project.key}/files`} className="h-10 px-2 text-[13px] leading-10 text-muted">
             Reset

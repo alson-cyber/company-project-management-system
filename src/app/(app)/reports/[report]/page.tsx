@@ -21,6 +21,7 @@ import { companyToday, completionTrend, listVisibleCompletionEvidence } from "@/
 import type { AuthContext } from "@/server/access/types";
 import { requireAuthContext } from "@/server/access/session";
 import { getEnv } from "@/server/env";
+import { FilterApplyButton } from "@/components/ui/filter-fields";
 
 export async function generateMetadata({ params }: { params: Promise<{ report: string }> }): Promise<Metadata> {
   const { report } = await params;
@@ -222,12 +223,7 @@ function FilterBar({
           <DateFilter label="To" name="to" value={filters.range === "custom" ? filters.to : ""} />
         </>
       ) : null}
-      <button
-        type="submit"
-        className="h-10 rounded-lg bg-accent px-4 text-[13px] font-semibold text-on-accent shadow-card transition-colors hover:bg-accent-strong"
-      >
-        Apply filters
-      </button>
+      <FilterApplyButton>Apply filters</FilterApplyButton>
     </ReportFilterForm>
   );
 }

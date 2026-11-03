@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { FilterApplyButton } from "@/components/ui/filter-fields";
 
 /**
  * A GET form that applies itself as soon as a filter changes, so there is no Apply button.
@@ -28,9 +29,7 @@ export function AutoSubmitForm({ children, label }: { children: ReactNode; label
     >
       {children}
       <noscript>
-        <button type="submit" className="h-9 px-3 text-[13px] font-semibold">
-          Apply
-        </button>
+        <FilterApplyButton />
       </noscript>
     </form>
   );

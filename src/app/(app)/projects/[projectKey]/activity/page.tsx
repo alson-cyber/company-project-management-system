@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { ProjectIssueLink } from "@/components/projects/project-issue-link";
 import { ProjectWorkspaceHeader } from "@/components/projects/project-workspace-header";
 import { ReportFilterForm } from "@/components/reporting/report-filter-form";
-import { FilterInput, FilterSelect, filterLabelClass } from "@/components/ui/filter-fields";
+import { FilterInput, FilterSelect, filterLabelClass, FilterApplyButton } from "@/components/ui/filter-fields";
 import { formatDate } from "@/components/ui/format";
 import { addCalendarDays, calendarDayInTimeZone } from "@/lib/calendar";
 import { activityActionLabel, activityDetail, activityKind, describeActivity } from "@/modules/activity/activity.format";
@@ -188,12 +188,7 @@ export default async function ActivityPage({
           To
           <FilterInput name="to" type="date" defaultValue={to} aria-label="To" />
         </label>
-        <button
-          type="submit"
-          className="h-10 w-full rounded-xl bg-accent px-4 text-[13px] font-semibold text-on-accent transition-opacity hover:opacity-90"
-        >
-          Apply
-        </button>
+        <FilterApplyButton />
       </ReportFilterForm>
 
       {filtering ? (
