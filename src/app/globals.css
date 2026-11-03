@@ -1,56 +1,303 @@
 @import "tailwindcss";
 
-/* Design tokens carried over from prototype/styles.css (:root). */
+/*
+ * "Warm Sand" theme: a paper-like sand background with white blocks on top,
+ * a charcoal accent, soft warm lines and quiet shadows. Each section of a page
+ * sits in its own block so it reads as a separate thing.
+ * The only strong colours are the four issue types and status/priority signals.
+ */
 @theme {
   --font-sans: "Inter Variable", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
-  --color-canvas: #f6f7f9;
+  --color-canvas: #f6f3ee;
   --color-surface: #ffffff;
-  --color-surface-2: #fbfcfd;
-  --color-surface-3: #f0f3f7;
-  --color-ink: #172033;
-  --color-muted: #646d84;
-  --color-muted-2: #8e97a9;
-  --color-line: #e5e9f0;
-  --color-line-strong: #d7dce5;
+  --color-surface-2: #faf8f5;
+  --color-surface-3: #f1ede6;
+  --color-ink: #32302c;
+  --color-muted: #6c675f;
+  --color-muted-2: #8f887e;
+  --color-line: #e9e4dc;
+  --color-line-strong: #d9d2c7;
 
-  --color-accent: #4f6cf7;
-  --color-accent-strong: #3c56db;
-  --color-accent-soft: #edf1ff;
+  /* Neutral accent: primary buttons, selection and focus stay calm and never compete with type colours. */
+  --color-accent: #2f2e2b;
+  --color-accent-strong: #1f1e1c;
+  --color-accent-soft: #efe9df;
+  /* Text and icons placed on top of the accent colour (primary buttons, the logo mark). */
+  --color-on-accent: #ffffff;
 
-  --color-nav: #101827;
-  --color-nav-2: #172236;
-  --color-nav-active: #24324b;
-  --color-nav-text: #c4cddd;
-  --color-nav-muted: #7d8aa0;
+  /* Sidebar: a slightly deeper sand than the page. */
+  --color-nav: #efebe4;
+  --color-nav-2: #e7e2d9;
+  --color-nav-active: #e0d9cd;
+  --color-nav-text: #5c5750;
+  --color-nav-muted: #9a938a;
 
-  --color-success: #1a8a5c;
-  --color-success-soft: #e7f7f0;
-  --color-warning: #a8690f;
-  --color-warning-soft: #fff5df;
-  --color-danger: #c93a4d;
-  --color-danger-soft: #ffecef;
-  --color-purple: #7444e6;
-  --color-purple-soft: #f2ebff;
-  --color-teal: #11907c;
-  --color-teal-soft: #e4f7f3;
+  --color-info: #2f6fd0;
+  --color-info-soft: #e9f1fb;
+  --color-success: #1d8a5a;
+  --color-success-soft: #e8f5ee;
+  --color-warning: #9a6512;
+  --color-warning-soft: #fbf3e2;
+  --color-danger: #c4384b;
+  --color-danger-soft: #fcecee;
+  --color-purple: #7048d6;
+  --color-purple-soft: #f2eefc;
+  --color-teal: #0f8574;
+  --color-teal-soft: #e5f4f1;
 
-  --shadow-card: 0 1px 2px rgba(21, 28, 45, 0.04), 0 6px 18px rgba(21, 28, 45, 0.03);
-  --shadow-pop: 0 14px 40px rgba(21, 28, 45, 0.12);
+  /* Issue types. Each has a solid colour (icons, stripes, bars) and a soft tint (chips, row highlights). */
+  --color-epic: #7c4ddb;
+  --color-epic-ink: #6237bf;
+  --color-epic-soft: #f3eefd;
+  --color-story: #1f9d6b;
+  --color-story-ink: #157a52;
+  --color-story-soft: #e6f5ee;
+  --color-task: #2f80ed;
+  --color-task-ink: #1f63c4;
+  --color-task-soft: #e8f1fd;
+  --color-subtask: #e07b2e;
+  --color-subtask-ink: #a44f12;
+  --color-subtask-soft: #fdf0e5;
 
-  --radius-card: 12px;
+  --shadow-card: 0 1px 2px rgba(60, 45, 25, 0.05), 0 2px 8px rgba(60, 45, 25, 0.04);
+  --shadow-lift: 0 2px 4px rgba(60, 45, 25, 0.06), 0 8px 20px rgba(60, 45, 25, 0.08);
+  --shadow-pop: 0 12px 32px rgba(60, 45, 25, 0.14), 0 0 0 1px rgba(60, 45, 25, 0.06);
+
+  --radius-card: 14px;
 }
 
 @layer base {
   html {
     color-scheme: light;
   }
+  html[data-theme="dark"] {
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    html:not([data-theme="light"]) {
+      color-scheme: dark;
+    }
+  }
   body {
     @apply bg-canvas text-ink font-sans antialiased;
     font-feature-settings: "cv11", "ss01";
   }
   :focus-visible {
-    outline: 2px solid color-mix(in srgb, var(--color-accent) 55%, transparent);
+    outline: 2px solid color-mix(in srgb, var(--color-info) 60%, transparent);
     outline-offset: 2px;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Motion. Short and soft (150–260 ms), never bouncy. Everything here switches
+ * off for people who ask their system for reduced motion.
+ * ------------------------------------------------------------------------- */
+@theme {
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --animate-enter: enter 260ms var(--ease-out-soft) both;
+  --animate-slide-in: slide-in 240ms var(--ease-out-soft) both;
+  --animate-pop: pop 320ms var(--ease-out-soft) both;
+  --animate-done-glow: done-glow 1100ms ease-out both;
+  --animate-shimmer: shimmer 1.4s linear infinite;
+
+  @keyframes enter {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes slide-in {
+    from {
+      opacity: 0;
+      transform: translateX(12px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes pop {
+    0% {
+      transform: scale(0.6);
+      opacity: 0;
+    }
+    60% {
+      transform: scale(1.08);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+  @keyframes done-glow {
+    0% {
+      box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-success) 45%, transparent);
+      background-color: var(--color-success-soft);
+    }
+    70% {
+      box-shadow: 0 0 0 10px transparent;
+    }
+    100% {
+      box-shadow: 0 0 0 0 transparent;
+    }
+  }
+  @keyframes shimmer {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
+}
+
+@layer components {
+  /* Placeholder bars shown while a page loads. */
+  .skeleton {
+    border-radius: 8px;
+    background: linear-gradient(
+      90deg,
+      var(--color-surface-3) 0%,
+      color-mix(in srgb, var(--color-surface-3) 40%, var(--color-surface)) 50%,
+      var(--color-surface-3) 100%
+    );
+    background-size: 200% 100%;
+    animation: var(--animate-shimmer);
+  }
+
+  /* Page content eases in, with direct children following one after another. */
+  .stagger > * {
+    animation: var(--animate-enter);
+  }
+  .stagger > *:nth-child(2) {
+    animation-delay: 40ms;
+  }
+  .stagger > *:nth-child(3) {
+    animation-delay: 80ms;
+  }
+  .stagger > *:nth-child(4) {
+    animation-delay: 120ms;
+  }
+  .stagger > *:nth-child(n + 5) {
+    animation-delay: 160ms;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Dark theme. Same names, darker values, so every component follows along.
+ * "System" follows the computer's setting; Light and Dark override it.
+ * ------------------------------------------------------------------------- */
+html[data-theme="dark"] {
+  --color-canvas: #191816;
+  --color-surface: #22211e;
+  --color-surface-2: #272623;
+  --color-surface-3: #302e2a;
+  --color-ink: #ece8e1;
+  --color-muted: #aaa49a;
+  --color-muted-2: #8a847a;
+  --color-line: #353330;
+  --color-line-strong: #46433e;
+  --color-accent: #ece8e1;
+  --color-accent-strong: #ffffff;
+  --color-accent-soft: #34322e;
+  --color-on-accent: #1c1b19;
+  --color-nav: #1d1c1a;
+  --color-nav-2: #282724;
+  --color-nav-active: #33312d;
+  --color-nav-text: #c3bdb3;
+  --color-nav-muted: #8a847a;
+  --color-info: #82b1ff;
+  --color-info-soft: #1e2a3c;
+  --color-success: #55c793;
+  --color-success-soft: #1b2e25;
+  --color-warning: #e4ad52;
+  --color-warning-soft: #33291a;
+  --color-danger: #f27a8b;
+  --color-danger-soft: #3b2026;
+  --color-purple: #b9a1ff;
+  --color-purple-soft: #2b2440;
+  --color-teal: #57cdb9;
+  --color-teal-soft: #1a302c;
+  --color-epic: #9a73f0;
+  --color-epic-ink: #c9b2ff;
+  --color-epic-soft: #2b2340;
+  --color-story: #33b27e;
+  --color-story-ink: #79d6ac;
+  --color-story-soft: #1c2f27;
+  --color-task: #4c93f2;
+  --color-task-ink: #97c0ff;
+  --color-task-soft: #1c2a3e;
+  --color-subtask: #e58a43;
+  --color-subtask-ink: #f3b07a;
+  --color-subtask-soft: #37271a;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.02);
+  --shadow-lift: 0 4px 14px rgba(0, 0, 0, 0.4);
+  --shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) {
+    --color-canvas: #191816;
+    --color-surface: #22211e;
+    --color-surface-2: #272623;
+    --color-surface-3: #302e2a;
+    --color-ink: #ece8e1;
+    --color-muted: #aaa49a;
+    --color-muted-2: #8a847a;
+    --color-line: #353330;
+    --color-line-strong: #46433e;
+    --color-accent: #ece8e1;
+    --color-accent-strong: #ffffff;
+    --color-accent-soft: #34322e;
+    --color-on-accent: #1c1b19;
+    --color-nav: #1d1c1a;
+    --color-nav-2: #282724;
+    --color-nav-active: #33312d;
+    --color-nav-text: #c3bdb3;
+    --color-nav-muted: #8a847a;
+    --color-info: #82b1ff;
+    --color-info-soft: #1e2a3c;
+    --color-success: #55c793;
+    --color-success-soft: #1b2e25;
+    --color-warning: #e4ad52;
+    --color-warning-soft: #33291a;
+    --color-danger: #f27a8b;
+    --color-danger-soft: #3b2026;
+    --color-purple: #b9a1ff;
+    --color-purple-soft: #2b2440;
+    --color-teal: #57cdb9;
+    --color-teal-soft: #1a302c;
+    --color-epic: #9a73f0;
+    --color-epic-ink: #c9b2ff;
+    --color-epic-soft: #2b2340;
+    --color-story: #33b27e;
+    --color-story-ink: #79d6ac;
+    --color-story-soft: #1c2f27;
+    --color-task: #4c93f2;
+    --color-task-ink: #97c0ff;
+    --color-task-soft: #1c2a3e;
+    --color-subtask: #e58a43;
+    --color-subtask-ink: #f3b07a;
+    --color-subtask-soft: #37271a;
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.02);
+    --shadow-lift: 0 4px 14px rgba(0, 0, 0, 0.4);
+    --shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06);
   }
 }

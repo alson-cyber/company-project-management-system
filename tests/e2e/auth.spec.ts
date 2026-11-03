@@ -1,20 +1,11 @@
-import { expect, test, type Page } from "@playwright/test";
-
-const password = process.env.SEED_DEV_PASSWORD ?? "workhub-dev-only-pass";
+import { expect, test } from "@playwright/test";
+import { signIn } from "./sign-in";
 
 const accounts = {
   member: "alex.noor@workhub.test",
   executive: "alson.chen@workhub.test",
   admin: "omar.haleem@workhub.test",
 } as const;
-
-async function signIn(page: Page, email: string) {
-  await page.goto("/login");
-  await page.getByLabel("Work email").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL((url) => !url.pathname.startsWith("/login"));
-}
 
 test("unauthenticated visitors are sent to login", async ({ page }) => {
   await page.goto("/projects");

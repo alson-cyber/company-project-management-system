@@ -16,9 +16,20 @@ import { Avatar } from "@/components/ui/avatar";
 import { cn } from "@/components/ui/cn";
 import { controlClasses, TextArea, TextInput } from "@/components/ui/field";
 import { formatDate, formatDateTime, toDate } from "@/components/ui/format";
-import { IssuePriorityBadge, IssueStatusBadge, IssueTypeBadge } from "@/components/ui/issue-badges";
+import {
+  ISSUE_TYPE_STYLES,
+  IssuePriorityBadge,
+  IssueStatusBadge,
+  IssueTypeBadge,
+} from "@/components/ui/issue-badges";
+import { ProgressRing } from "@/components/ui/progress-ring";
 import { calendarDayUtc } from "@/lib/calendar";
-import { activityDetail, activityKind, describeActivity, type ActivityEventView } from "@/modules/activity/activity.format";
+import {
+  activityDetail,
+  activityKind,
+  describeActivity,
+  type ActivityEventView,
+} from "@/modules/activity/activity.format";
 import type { AttachmentView, CommentView, NoteView } from "@/modules/collaboration/collaboration.queries";
 import {
   ISSUE_PRIORITIES,
@@ -107,21 +118,47 @@ export function IssueInspector({
   };
 
   return (
-    <div className="flex min-h-0 flex-col">
+    <div className="flex min-h-0 animate-slide-in flex-col">
       <header className="sticky top-0 z-10 border-b border-line bg-surface px-4 py-4 sm:px-5">
+        <span
+          aria-hidden="true"
+          className={cn("absolute inset-x-0 top-0 h-[3px]", ISSUE_TYPE_STYLES[issue.type].solid)}
+        />
         <div className="mb-3 flex items-center justify-between gap-3">
-          <Link href={`/projects/${issue.project.key}/issues`} scroll={false} className="text-sm font-medium text-accent-strong">
-            <span className="lg:hidden">Back to hierarchy</span>
-            <span className="hidden lg:inline">Close</span>
+          <Link
+            href={`/projects/${issue.project.key}/issues`}
+            scroll={false}
+            className="inline-flex items-center gap-1 rounded-md text-sm font-medium text-muted transition-colors hover:text-ink lg:size-8 lg:justify-center lg:hover:bg-surface-3"
+            title="Close (Esc)"
+          >
+            <span className="lg:hidden">
+              <span aria-hidden="true">← </span>Back to hierarchy
+            </span>
+            <span className="hidden lg:inline">
+              <svg viewBox="0 0 16 16" className="size-4" aria-hidden="true">
+                <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+              </svg>
+              <span className="sr-only">Close</span>
+            </span>
           </Link>
           {issue.canMutate ? (
             <details className="relative">
-              <summary className="cursor-pointer list-none rounded-md px-2 py-1.5 text-[13px] font-medium text-muted hover:bg-surface-3 hover:text-ink [&::-webkit-details-marker]:hidden">
-                More actions
+              <summary
+                className="grid size-8 cursor-pointer list-none place-items-center rounded-md text-muted transition-colors hover:bg-surface-3 hover:text-ink [&::-webkit-details-marker]:hidden"
+                title="More actions"
+              >
+                <svg viewBox="0 0 16 16" className="size-4" aria-hidden="true">
+                  <circle cx="3.5" cy="8" r="1.3" fill="currentColor" />
+                  <circle cx="8" cy="8" r="1.3" fill="currentColor" />
+                  <circle cx="12.5" cy="8" r="1.3" fill="currentColor" />
+                </svg>
+                <span className="sr-only">More actions</span>
               </summary>
-              <div className="absolute right-0 z-20 mt-1 w-72 rounded-lg border border-line bg-surface p-3">
+              <div className="absolute right-0 z-20 mt-1 w-72 rounded-lg border border-line bg-surface p-3 shadow-pop">
                 <h3 className="text-sm font-semibold">{issue.archivedAt ? "Restore" : "Archive"}</h3>
-                <p className="mb-2 mt-1 text-[13px] leading-relaxed text-muted">History is kept. The issue key is not reused.</p>
+                <p className="mb-2 mt-1 text-[13px] leading-relaxed text-muted">
+                  History is kept. The issue key is not reused.
+                </p>
                 <ArchiveRestoreForm issue={issue} />
               </div>
             </details>
@@ -135,54 +172,118 @@ export function IssueInspector({
           {issue.archivedAt ? <span className="text-xs font-semibold text-warning">Archived</span> : null}
         </div>
 
-        <TitleEditor issue={issue} editable={editable} pending={pendingField === "title"} onSave={(title) => patch("title", { title })} />
+        <TitleEditor
+          issue={issue}
+          editable={editable}
+          pending={pendingField === "title"}
+          onSave={(title) => patch("title", { title })}
+        />
 
-        <div className="mt-3 flex flex-wrap items-center gap-1.5">
-          <ChoiceMenu
-            label={`Status, ${ISSUE_STATUS_LABELS[issue.status]}`}
-            disabled={!editable || pendingField === "status"}
-            trigger={<IssueStatusBadge status={issue.status} />}
-          >
-            {ISSUE_STATUSES.map((status) => (
-              <DropdownMenu.Item key={status} className={menuItemClass} onSelect={() => void patch("status", { status })}>
-                {ISSUE_STATUS_LABELS[status]}
-              </DropdownMenu.Item>
-            ))}
-          </ChoiceMenu>
-          <ChoiceMenu
-            label={`Priority, ${ISSUE_PRIORITY_LABELS[issue.priority]}`}
-            disabled={!editable || pendingField === "priority"}
-            trigger={<IssuePriorityBadge priority={issue.priority} />}
-          >
-            {ISSUE_PRIORITIES.map((priority) => (
-              <DropdownMenu.Item key={priority} className={menuItemClass} onSelect={() => void patch("priority", { priority })}>
-                {ISSUE_PRIORITY_LABELS[priority]}
-              </DropdownMenu.Item>
-            ))}
-          </ChoiceMenu>
-          <AssigneeMenu
-            issue={issue}
-            members={members}
-            disabled={!editable || pendingField === "assignee"}
-            onSelect={(assigneeId) => void patch("assignee", { assigneeId })}
-          />
+        <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(6.5rem,max-content))] items-start gap-x-4 gap-y-3">
+          <FieldLabel label="Status">
+            <ChoiceMenu
+              label={`Status, ${ISSUE_STATUS_LABELS[issue.status]}`}
+              disabled={!editable || pendingField === "status"}
+              trigger={<IssueStatusBadge status={issue.status} />}
+            >
+              {ISSUE_STATUSES.map((status) => (
+                <DropdownMenu.Item
+                  key={status}
+                  className={menuItemClass}
+                  onSelect={() => void patch("status", { status })}
+                >
+                  {ISSUE_STATUS_LABELS[status]}
+                </DropdownMenu.Item>
+              ))}
+            </ChoiceMenu>
+          </FieldLabel>
+          <FieldLabel label="Priority">
+            <ChoiceMenu
+              label={`Priority, ${ISSUE_PRIORITY_LABELS[issue.priority]}`}
+              disabled={!editable || pendingField === "priority"}
+              trigger={<IssuePriorityBadge priority={issue.priority} />}
+            >
+              {ISSUE_PRIORITIES.map((priority) => (
+                <DropdownMenu.Item
+                  key={priority}
+                  className={menuItemClass}
+                  onSelect={() => void patch("priority", { priority })}
+                >
+                  {ISSUE_PRIORITY_LABELS[priority]}
+                </DropdownMenu.Item>
+              ))}
+            </ChoiceMenu>
+          </FieldLabel>
+          <FieldLabel label="Assignee">
+            <AssigneeMenu
+              issue={issue}
+              members={members}
+              disabled={!editable || pendingField === "assignee"}
+              onSelect={(assigneeId) => void patch("assignee", { assigneeId })}
+            />
+          </FieldLabel>
         </div>
+        {issue.status !== "DONE" &&
+        issue.progress.total > 0 &&
+        issue.progress.done === issue.progress.total ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-success-soft px-3 py-2 text-[13px] text-success">
+            <span className="min-w-0 flex-1">
+              Everything under this is done. It stays open until someone marks it Done.
+            </span>
+            {editable ? (
+              <button
+                type="button"
+                disabled={pendingField === "status"}
+                className="h-7 shrink-0 rounded-md bg-success px-2.5 text-xs font-medium text-surface transition-transform active:scale-[0.97] disabled:opacity-60"
+                onClick={() => void patch("status", { status: "DONE" })}
+              >
+                Mark as Done
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         {message ? (
           <p
             role={message.tone === "error" ? "alert" : "status"}
-            className={cn("mt-2 text-[13px] font-medium", message.tone === "error" ? "text-danger" : "text-muted")}
+            className={cn(
+              "mt-2 flex items-center gap-1.5 text-[13px] font-medium",
+              message.tone === "error"
+                ? "text-danger"
+                : message.tone === "celebrate"
+                  ? "text-success"
+                  : "text-muted",
+            )}
           >
+            {message.tone === "celebrate" ? (
+              <span
+                className="grid size-4 animate-pop place-items-center rounded-full bg-success text-white"
+                aria-hidden="true"
+              >
+                <svg viewBox="0 0 16 16" className="size-2.5">
+                  <path
+                    d="m3.5 8.4 3 3 6-6.6"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+            ) : null}
             {message.text}
           </p>
         ) : null}
       </header>
 
-      {issue.governingStory ? <GoverningStory projectKey={issue.project.key} story={issue.governingStory} /> : null}
+      {issue.governingStory ? (
+        <GoverningStory projectKey={issue.project.key} story={issue.governingStory} />
+      ) : null}
 
       <div
         role="tablist"
         aria-label="Issue sections"
-        className="flex gap-1 overflow-x-auto border-b border-line px-3"
+        className="flex gap-0.5 overflow-x-auto border-b border-line px-3 [mask-image:linear-gradient(to_right,black_calc(100%-2rem),transparent)] [scrollbar-width:none]"
         onKeyDown={onTabKeyDown}
       >
         {tabs.map((tab) => {
@@ -197,20 +298,34 @@ export function IssueInspector({
               aria-selected={selected}
               aria-controls={`issue-panel-${tab.id}`}
               tabIndex={selected ? 0 : -1}
+              aria-label={name}
               className={cn(
-                "shrink-0 border-b-2 px-2.5 py-3 text-[13px]",
-                selected ? "border-accent font-semibold text-ink" : "border-transparent text-muted hover:text-ink",
+                "inline-flex shrink-0 items-center gap-1.5 border-b-2 px-2 py-3 text-[13px] transition-colors",
+                selected
+                  ? "border-accent font-semibold text-ink"
+                  : "border-transparent text-muted hover:text-ink",
               )}
               onClick={() => selectSection(tab.id)}
             >
-              {name}
+              {tab.label}
+              {tab.count ? (
+                <span className="rounded-full bg-surface-3 px-1.5 text-[11px] font-medium tabular-nums text-muted">
+                  {tab.count}
+                </span>
+              ) : null}
             </button>
           );
         })}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <section role="tabpanel" id="issue-panel-details" aria-labelledby="issue-tab-details" hidden={section !== "details"} className="px-4 py-4 sm:px-5">
+        <section
+          role="tabpanel"
+          id="issue-panel-details"
+          aria-labelledby="issue-tab-details"
+          hidden={section !== "details"}
+          className="px-4 py-4 sm:px-5"
+        >
           <Details
             issue={issue}
             editable={editable}
@@ -221,7 +336,13 @@ export function IssueInspector({
             pendingField={pendingField}
           />
         </section>
-        <section role="tabpanel" id="issue-panel-notes" aria-labelledby="issue-tab-notes" hidden={section !== "notes"} className="px-4 py-4 sm:px-5">
+        <section
+          role="tabpanel"
+          id="issue-panel-notes"
+          aria-labelledby="issue-tab-notes"
+          hidden={section !== "notes"}
+          className="px-4 py-4 sm:px-5"
+        >
           <NotesPanel issue={target} notes={notes} viewerId={viewer.id} canModerate={viewer.canModerate} />
         </section>
         <section
@@ -233,13 +354,36 @@ export function IssueInspector({
         >
           <AttachmentsPanel issue={target} attachments={attachments} />
         </section>
-        <section role="tabpanel" id="issue-panel-comments" aria-labelledby="issue-tab-comments" hidden={section !== "comments"} className="px-4 py-4 sm:px-5">
-          <CommentsPanel issue={target} comments={comments} viewerId={viewer.id} canModerate={viewer.canModerate} />
+        <section
+          role="tabpanel"
+          id="issue-panel-comments"
+          aria-labelledby="issue-tab-comments"
+          hidden={section !== "comments"}
+          className="px-4 py-4 sm:px-5"
+        >
+          <CommentsPanel
+            issue={target}
+            comments={comments}
+            viewerId={viewer.id}
+            canModerate={viewer.canModerate}
+          />
         </section>
-        <section role="tabpanel" id="issue-panel-activity" aria-labelledby="issue-tab-activity" hidden={section !== "activity"} className="px-4 py-4 sm:px-5">
+        <section
+          role="tabpanel"
+          id="issue-panel-activity"
+          aria-labelledby="issue-tab-activity"
+          hidden={section !== "activity"}
+          className="px-4 py-4 sm:px-5"
+        >
           <ActivityList activity={activity} />
         </section>
-        <section role="tabpanel" id="issue-panel-children" aria-labelledby="issue-tab-children" hidden={section !== "children"} className="px-4 py-4 sm:px-5">
+        <section
+          role="tabpanel"
+          id="issue-panel-children"
+          aria-labelledby="issue-tab-children"
+          hidden={section !== "children"}
+          className="px-4 py-4 sm:px-5"
+        >
           <ChildWork issue={issue} childIssues={childIssues} members={members} label={childLabel} />
         </section>
       </div>
@@ -250,7 +394,9 @@ export function IssueInspector({
 function useIssuePatch(issue: IssueDetail) {
   const router = useRouter();
   const [pendingField, setPendingField] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ tone: "error" | "success"; text: string } | null>(null);
+  const [message, setMessage] = useState<{ tone: "error" | "success" | "celebrate"; text: string } | null>(
+    null,
+  );
 
   async function patch(field: string, values: Record<string, string>) {
     setPendingField(field);
@@ -266,7 +412,12 @@ function useIssuePatch(issue: IssueDetail) {
       setMessage({ tone: "error", text: result?.error.message ?? "Could not save." });
       return false;
     }
-    setMessage({ tone: "success", text: result.data.changed === false ? "No changes to save." : "Saved." });
+    const finished = values.status === "DONE" && result.data.changed !== false;
+    setMessage(
+      finished
+        ? { tone: "celebrate", text: "Done. Nice work!" }
+        : { tone: "success", text: result.data.changed === false ? "No changes to save." : "Saved." },
+    );
     router.refresh();
     return true;
   }
@@ -290,18 +441,42 @@ function TitleEditor({
 
   if (!editing) {
     return (
-      <div className="mt-2 flex items-start gap-2">
-        <h2 className="min-w-0 flex-1 text-xl font-semibold tracking-[-0.02em]">{issue.title}</h2>
+      <div className="group mt-2 flex items-start gap-2">
+        <h2 className="min-w-0 flex-1 text-xl font-semibold tracking-[-0.02em]">
+          {editable ? (
+            <span
+              className="-mx-1.5 block cursor-text rounded-md px-1.5 transition-colors hover:bg-surface-3"
+              title="Click to edit"
+              onClick={() => {
+                draft.markClean(issue.title);
+                setEditing(true);
+              }}
+            >
+              {issue.title}
+            </span>
+          ) : (
+            issue.title
+          )}
+        </h2>
         {editable ? (
           <button
             type="button"
-            className="shrink-0 rounded-md px-2 py-1 text-[13px] font-medium text-muted hover:bg-surface-3 hover:text-ink"
+            aria-label="Edit title"
+            className="grid size-8 shrink-0 place-items-center rounded-md text-muted opacity-60 transition-opacity hover:bg-surface-3 hover:text-ink group-hover:opacity-100 focus-visible:opacity-100"
             onClick={() => {
               draft.markClean(issue.title);
               setEditing(true);
             }}
           >
-            Edit title
+            <svg viewBox="0 0 16 16" className="size-3.5" aria-hidden="true">
+              <path
+                d="M10.8 2.7a1.6 1.6 0 0 1 2.3 2.3l-7.4 7.4-3 .7.7-3z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinejoin="round"
+              />
+            </svg>
           </button>
         ) : null}
       </div>
@@ -367,7 +542,11 @@ function ChoiceMenu({
         {trigger}
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content align="start" sideOffset={6} className="z-50 min-w-44 rounded-lg border border-line bg-surface p-1">
+        <DropdownMenu.Content
+          align="start"
+          sideOffset={6}
+          className="z-50 min-w-44 rounded-lg border border-line bg-surface p-1"
+        >
           {children}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
@@ -401,7 +580,11 @@ function AssigneeMenu({
         <span>{current}</span>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content align="start" sideOffset={6} className="z-50 w-64 rounded-lg border border-line bg-surface p-1">
+        <DropdownMenu.Content
+          align="start"
+          sideOffset={6}
+          className="z-50 w-64 rounded-lg border border-line bg-surface p-1"
+        >
           <div className="p-1">
             <input
               aria-label="Find a person"
@@ -475,7 +658,9 @@ function Details({
 }) {
   return (
     <div className="grid gap-6">
-      {issue.type === "USER_STORY" && issue.story ? <StoryDocument issue={issue} story={issue.story} editable={editable} /> : null}
+      {issue.type === "USER_STORY" && issue.story ? (
+        <StoryDocument issue={issue} story={issue.story} editable={editable} />
+      ) : null}
       <DescriptionEditor
         issue={issue}
         editable={editable}
@@ -492,13 +677,21 @@ function Details({
         />
       ) : null}
       {issue.type !== "SUB_TASK" ? (
-        <p className="text-sm">
+        <p className="flex flex-wrap items-center gap-2 text-sm">
+          {issue.progress.total > 0 ? (
+            <ProgressRing
+              percent={issue.progress.percent}
+              size={22}
+              label={`${issue.progress.percent}% complete`}
+            />
+          ) : null}
           <button type="button" className="font-medium text-accent-strong" onClick={onOpenChildren}>
-            {childCount === 0 ? `No ${childLabel.toLowerCase()} yet` : `${childCount} ${childLabel.toLowerCase()}`}
+            {childCount === 0
+              ? `No ${childLabel.toLowerCase()} yet`
+              : `${childCount} ${(childCount === 1 ? singularChildLabel(childLabel) : childLabel).toLowerCase()}`}
           </button>
           {issue.progress.total > 0 ? (
             <span className="text-muted">
-              {" "}
               · {issue.progress.done}/{issue.progress.total} done
             </span>
           ) : null}
@@ -706,7 +899,9 @@ function Properties({
   return (
     <dl className="border-t border-line">
       <Property label="Reporter">{issue.reporter.name}</Property>
-      {issue.creator.id !== issue.reporter.id ? <Property label="Creator">{issue.creator.name}</Property> : null}
+      {issue.creator.id !== issue.reporter.id ? (
+        <Property label="Creator">{issue.creator.name}</Property>
+      ) : null}
       <Property label="Parent">
         {issue.parent ? (
           <Link href={issueHref(issue.project.key, issue.parent.key)} scroll={false} className="font-medium">
@@ -813,8 +1008,17 @@ function Properties({
             ) : null}
           </div>
         ) : (
-          <button type="button" className="text-left disabled:cursor-default" disabled={!editable} onClick={() => editable && setEditingLabels(true)}>
-            {issue.labels.length > 0 ? issue.labels.map((label) => label.name).join(", ") : <span className="text-muted">None</span>}
+          <button
+            type="button"
+            className="text-left disabled:cursor-default"
+            disabled={!editable}
+            onClick={() => editable && setEditingLabels(true)}
+          >
+            {issue.labels.length > 0 ? (
+              issue.labels.map((label) => label.name).join(", ")
+            ) : (
+              <span className="text-muted">None</span>
+            )}
             {editable ? <span className="sr-only"> Edit labels</span> : null}
           </button>
         )}
@@ -842,8 +1046,13 @@ function ActivityList({ activity }: { activity: ActivityEventView[] }) {
         const detail = activityDetail(event);
         const occurred = toDate(event.occurredAt);
         return (
-          <li key={event.id} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 border-b border-line py-3">
-            <span className="pt-0.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-2">{activityKind(event)}</span>
+          <li
+            key={event.id}
+            className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 border-b border-line py-3"
+          >
+            <span className="pt-0.5 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-2">
+              {activityKind(event)}
+            </span>
             <div>
               <p className="text-sm">
                 <span className="font-semibold">{event.actorName ?? "System"}</span>{" "}
@@ -880,7 +1089,8 @@ function ChildWork({
   return (
     <div className="grid gap-4">
       {issue.progress.total > 0 ? (
-        <p className="text-[13px] text-muted">
+        <p className="flex items-center gap-2 text-[13px] text-muted">
+          <ProgressRing percent={issue.progress.percent} size={20} />
           {issue.progress.done} / {issue.progress.total} done
         </p>
       ) : null}
@@ -888,7 +1098,11 @@ function ChildWork({
       <ul className="grid">
         {childIssues.map((child) => (
           <li key={child.id} className="border-b border-line">
-            <Link href={`/projects/${issue.project.key}/issues/${child.number}`} scroll={false} className="grid gap-1 py-2.5 hover:bg-surface-2">
+            <Link
+              href={`/projects/${issue.project.key}/issues/${child.number}`}
+              scroll={false}
+              className="grid gap-1 py-2.5 hover:bg-surface-2"
+            >
               <span className="flex items-baseline gap-2">
                 <span className="font-mono text-xs text-muted">{child.key}</span>
                 <span className="min-w-0 flex-1 text-sm font-medium">{child.title}</span>
@@ -897,7 +1111,8 @@ function ChildWork({
                 <IssueStatusBadge status={child.status} />
                 <span>{child.assignee?.name ?? "Unassigned"}</span>
                 {child.progress.total > 0 ? (
-                  <span>
+                  <span className="inline-flex items-center gap-1">
+                    <ProgressRing percent={child.progress.percent} size={14} />
                     {child.progress.done}/{child.progress.total}
                   </span>
                 ) : null}
@@ -907,10 +1122,31 @@ function ChildWork({
         ))}
       </ul>
       {issue.allowedChildType && issue.canMutate && !issue.archivedAt ? (
-        <CreateIssueForm projectId={issue.project.id} type={issue.allowedChildType} parentId={issue.id} members={members} />
+        <CreateIssueForm
+          projectId={issue.project.id}
+          type={issue.allowedChildType}
+          parentId={issue.id}
+          members={members}
+        />
       ) : null}
     </div>
   );
+}
+
+/** A small caption above an inline control in the panel header. */
+function FieldLabel({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="grid min-w-0 gap-1">
+      <span className="text-[11px] font-medium uppercase tracking-wide text-muted">{label}</span>
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
+}
+
+function singularChildLabel(label: string): string {
+  if (label === "Stories") return "Story";
+  if (label === "Children") return "Child";
+  return label.replace(/s$/, "");
 }
 
 function childTabLabel(type: IssueType): string {

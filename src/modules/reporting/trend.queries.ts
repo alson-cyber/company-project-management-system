@@ -27,12 +27,12 @@ export async function completionTrend(ctx: AuthContext, projectIds: string[], fi
            count(*)::int AS count
     FROM activity_events
     INNER JOIN issues ON issues.id = activity_events.issue_id
-    WHERE activity_events.workspace_id = ${ctx.workspace.id}::uuid
+    WHERE activity_events.workspace_id = ${ctx.workspace.id}
       AND activity_events.action = 'issue.completed'
-      AND activity_events.project_id IN (${Prisma.join(projectIds.map((id) => Prisma.sql`${id}::uuid`))})
+      AND activity_events.project_id IN (${Prisma.join(projectIds.map((id) => Prisma.sql`${id}`))})
       AND activity_events.occurred_at >= ${from}
       AND activity_events.occurred_at < ${to}
-      ${filters.actorId ? Prisma.sql`AND activity_events.actor_user_id = ${filters.actorId}::uuid` : Prisma.empty}
+      ${filters.actorId ? Prisma.sql`AND activity_events.actor_user_id = ${filters.actorId}` : Prisma.empty}
       ${filters.issueType ? Prisma.sql`AND issues.type::text = ${filters.issueType}` : Prisma.empty}
     GROUP BY 1
     ORDER BY 1

@@ -6,7 +6,7 @@ export function BrandMark({ inverted = false, className }: { inverted?: boolean;
       aria-hidden="true"
       className={cn(
         "inline-grid size-8 shrink-0 place-items-center rounded-[9px] text-[13px] font-extrabold",
-        inverted ? "bg-white text-nav" : "bg-nav text-white",
+        inverted ? "bg-accent text-on-accent" : "bg-accent text-on-accent",
         className,
       )}
     >

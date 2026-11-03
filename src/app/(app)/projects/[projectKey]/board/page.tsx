@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import type { IssuePriority } from "@/generated/prisma/enums";
 import { ProjectBoard } from "@/components/projects/project-board";
 import { ProjectWorkspaceHeader } from "@/components/projects/project-workspace-header";
+import { FilterSelect, filterLabelClass, FilterApplyButton } from "@/components/ui/filter-fields";
 import { ISSUE_PRIORITIES, ISSUE_PRIORITY_LABELS, ISSUE_TYPE_LABELS } from "@/modules/issues/issue.constants";
 import { getVisibleProjectByKey } from "@/modules/projects/project.queries";
 import {
@@ -97,9 +98,7 @@ export default async function BoardPage({
             </option>
           ))}
         </Filter>
-        <button type="submit" className="h-10 px-3 text-[13px] font-semibold text-accent-strong hover:underline">
-          Apply
-        </button>
+        <FilterApplyButton />
         {filtering || mode !== "none" ? (
           <a href={`/projects/${project.key}/board`} className="h-10 px-2 text-[13px] leading-10 text-muted hover:text-ink">
             Reset
@@ -127,11 +126,11 @@ function Filter({
   children: ReactNode;
 }) {
   return (
-    <label className="grid gap-1 text-xs font-medium text-muted">
+    <label className={`${filterLabelClass} min-w-44`}>
       {label}
-      <select name={name} defaultValue={defaultValue} aria-label={label} className="h-10 min-w-36 border border-line bg-surface px-2 text-sm text-ink">
+      <FilterSelect name={name} defaultValue={defaultValue} aria-label={label}>
         {children}
-      </select>
+      </FilterSelect>
     </label>
   );
 }

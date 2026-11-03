@@ -1,14 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
-
-const password = process.env.SEED_DEV_PASSWORD ?? "workhub-dev-only-pass";
-
-async function signIn(page: Page, email: string) {
-  await page.goto("/login");
-  await page.getByLabel("Work email").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL((url) => !url.pathname.startsWith("/login"));
-}
+import { expect, test } from "@playwright/test";
+import { signIn } from "./sign-in";
 
 test("a project lead without the Executive grant cannot open Executive", async ({ page }) => {
   await signIn(page, "sarah.kim@workhub.test");

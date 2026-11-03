@@ -6,12 +6,41 @@ import { listScopedActivity } from "@/modules/activity/activity.queries";
 import { loadExecutivePortfolio, loadVisibleIssueFacts, loadVisiblePortfolio } from "@/modules/reporting/portfolio.queries";
 import { applyIssueFilters, overdueRows, statusCounts } from "@/modules/reporting/report.derive";
 import { parseReportFilters } from "@/modules/reporting/reports.model";
-import { listVisibleCompletionEvidence } from "@/modules/reporting/trend.queries";
+import { companyToday, completionTrend, listVisibleCompletionEvidence } from "@/modules/reporting/trend.queries";
 import { toCsv } from "@/modules/reporting/csv";
 import { getEnv } from "@/server/env";
 import { authContextFor, emails, testDb } from "./helpers";
 
 const at = new Date("2026-10-17T08:00:00.000Z");
+
+async function seededCompletionFixture() {
+  const executive = await authContextFor(emails.executive);
+  const event = await testDb.activityEvent.findFirstOrThrow({
+    where: {
+      workspaceId: executive.workspace.id,
+      action: "issue.completed",
+      project: { key: "AQUA" },
+      metadata: { path: ["source"], equals: "development-seed" },
+    },
+    orderBy: [{ occurredAt: "desc" }, { id: "asc" }],
+    select: {
+      actorUserId: true,
+      occurredAt: true,
+      issue: { select: { id: true, number: true, type: true, assigneeId: true } },
+      project: { select: { id: true, key: true } },
+    },
+  });
+  if (!event.issue || !event.project || !event.actorUserId) {
+    throw new Error("The seeded completion must have an issue, project and credited actor.");
+  }
+  // Seed events use their insertion date. Anchor to the fixture, not a fixed day
+  // or today's date, so a reused database remains valid after the seed ages.
+  const filters = parseReportFilters(
+    { range: "90", project: event.project.key },
+    companyToday(event.occurredAt),
+  );
+  return { executive, event, issue: event.issue, project: event.project, filters };
+}
 
 describe("executive reporting", () => {
   test("an executive can read the company portfolio, and health stays the stored label", async () => {
@@ -97,23 +126,30 @@ describe("executive reporting", () => {
   });
 
   test("completion credit stays with the person who completed the work", async () => {
-    const executive = await authContextFor(emails.executive);
-    const filters = parseReportFilters({ range: "90" }, "2026-10-17");
+    const { executive, event, issue, project, filters } = await seededCompletionFixture();
+    const key = `${project.key}-${issue.number}`;
     const before = await listVisibleCompletionEvidence(executive, filters, 50);
-    const credited = before.find((row) => row.actorUserId);
+    const credited = before.find((row) => row.issueKey === key);
     expect(credited?.actorUserId).toBeTruthy();
-    const issue = await testDb.issue.findFirstOrThrow({
-      where: { project: { key: credited?.projectKey }, number: Number(credited?.issueKey.split("-").at(-1)) },
-      select: { id: true, assigneeId: true },
-    });
+    expect(credited?.actorUserId).toBe(event.actorUserId);
     const other = await testDb.user.findFirstOrThrow({
-      where: { id: { not: issue.assigneeId ?? "00000000-0000-4000-8000-000000000000" }, status: "ACTIVE" },
+      where: {
+        id: { notIn: [issue.assigneeId, event.actorUserId].filter((id): id is string => id !== null) },
+        status: "ACTIVE",
+        projectMemberships: { some: { projectId: project.id } },
+      },
       select: { id: true },
     });
     await testDb.issue.update({ where: { id: issue.id }, data: { assigneeId: other.id } });
     try {
       const after = await listVisibleCompletionEvidence(executive, filters, 50);
-      expect(after.find((row) => row.issueKey === credited?.issueKey)?.actorUserId).toBe(credited?.actorUserId);
+      expect(after.find((row) => row.issueKey === key)).toMatchObject({
+        actorUserId: event.actorUserId,
+        assigneeAtCompletion: credited?.assigneeAtCompletion,
+      });
+      const stored = await testDb.issue.findUniqueOrThrow({ where: { id: issue.id } });
+      expect(stored.assigneeId).toBe(other.id);
+      expect(stored.completedById).toBe(event.actorUserId);
     } finally {
       await testDb.issue.update({ where: { id: issue.id }, data: { assigneeId: issue.assigneeId } });
     }
@@ -139,3 +175,19 @@ describe("executive reporting", () => {
     expect(csv).not.toContain("SignVeli");
   });
 });
+
+test.each(["project", "actor", "type", "actor and type"] as const)(
+  "completion trend matches evidence with %s filters",
+  async (scope) => {
+    const { executive, event, issue, project, filters } = await seededCompletionFixture();
+    if (scope.includes("actor")) filters.actorId = event.actorUserId;
+    if (scope.includes("type")) filters.issueType = issue.type;
+    const evidence = await listVisibleCompletionEvidence(executive, filters, 1000);
+    const points = await completionTrend(executive, [project.id], filters);
+    expect(evidence.length).toBeGreaterThan(0);
+    expect(points.reduce((sum, point) => sum + point.count, 0)).toBe(evidence.length);
+    for (const point of points) {
+      expect(point.count).toBe(evidence.filter((row) => companyToday(row.occurredAt) === point.day).length);
+    }
+  },
+);

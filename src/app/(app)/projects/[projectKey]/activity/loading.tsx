@@ -1,3 +1,5 @@
+import { ListSkeleton } from "@/components/ui/skeleton";
+
 export default function LoadingActivity() {
-  return <p className="text-sm text-muted">Loading activity…</p>;
+  return <ListSkeleton label="Loading activity…" />;
 }

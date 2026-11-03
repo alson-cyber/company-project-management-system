@@ -13,15 +13,18 @@ export function CardHeader({
   title,
   description,
   action,
+  id,
 }: {
   title: string;
   description?: string;
   action?: ReactNode;
+  /** Lets a surrounding section point at this heading with aria-labelledby. */
+  id?: string;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
+    <div className="flex items-start justify-between gap-4 border-b border-line/80 px-5 py-4">
       <div>
-        <h2 className="text-[15px] font-semibold tracking-[-0.01em]">{title}</h2>
+        <h2 id={id} className="text-[15px] font-semibold tracking-[-0.01em]">{title}</h2>
         {description ? <p className="mt-0.5 text-[13px] text-muted">{description}</p> : null}
       </div>
       {action}

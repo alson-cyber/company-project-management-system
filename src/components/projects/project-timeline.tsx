@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { IssueTypeBadge } from "@/components/ui/issue-badges";
+import { ISSUE_TYPE_STYLES, IssueTypeIcon, IssueTypeLegend } from "@/components/ui/issue-badges";
+import { cn } from "@/components/ui/cn";
+import { ProgressRing } from "@/components/ui/progress-ring";
 import { formatDate } from "@/components/ui/format";
 import {
   markerLeft,
@@ -38,6 +40,7 @@ export function ProjectTimeline({
 
   return (
     <div className="grid min-w-0 gap-3">
+      <IssueTypeLegend />
       <ul className="min-w-0 divide-y divide-line/70 md:hidden">
         {visible.map((row) => (
           <li key={row.issue.id} className="py-2.5" style={{ paddingLeft: row.depth * 12 }}>
@@ -47,7 +50,7 @@ export function ProjectTimeline({
         ))}
       </ul>
 
-      <div className="hidden overflow-auto border border-line md:block">
+      <div className="hidden overflow-auto rounded-[var(--radius-card)] border border-line bg-surface md:block">
         <div className="flex min-w-max">
           <div className="sticky left-0 z-20 w-72 shrink-0 border-r border-line bg-surface">
             <div className="flex h-10 items-end border-b border-line px-3 pb-2 text-xs font-semibold text-muted">Work</div>
@@ -84,7 +87,11 @@ export function ProjectTimeline({
                 <div key={row.issue.id} className="relative h-11 border-b border-line/70">
                   {mark?.kind === "bar" ? (
                     <div
-                      className={`absolute top-3.5 h-4 ${row.issue.overdue ? "bg-danger/80" : "bg-accent/80"}`}
+                      className={cn(
+                        "absolute top-3.5 h-4 rounded-[4px]",
+                        ISSUE_TYPE_STYLES[row.issue.type].bar,
+                        row.issue.overdue ? "ring-2 ring-danger ring-offset-1" : null,
+                      )}
                       style={{ left: `${mark.left}%`, width: `${mark.width}%` }}
                       title={`${row.issue.plannedStartDate} to ${row.issue.dueDate}`}
                     />
@@ -148,14 +155,21 @@ function RowLabel({
       ) : (
         <span className="size-6 shrink-0" aria-hidden="true" />
       )}
-      <IssueTypeBadge type={row.issue.type} />
-      <Link href={`/projects/${projectKey}/issues/${row.issue.number}`} className="min-w-0 flex-1 truncate text-[13px] font-medium hover:underline">
+      <IssueTypeIcon type={row.issue.type} size="sm" />
+      <Link
+        href={`/projects/${projectKey}/issues/${row.issue.number}`}
+        className={cn("min-w-0 flex-1 truncate text-[13px] hover:underline", row.issue.type === "EPIC" ? "font-semibold" : "font-medium")}
+      >
         <span className="mr-1 font-mono text-xs text-muted">{row.issue.key}</span>
         {row.issue.title}
       </Link>
       {row.issue.overdue ? <span className="shrink-0 text-[11px] font-semibold text-danger">Overdue</span> : null}
       {row.issue.progress.total > 0 ? (
-        <span className="shrink-0 text-[11px] tabular-nums text-muted">{row.issue.progress.percent}%</span>
+        <ProgressRing
+          percent={row.issue.progress.percent}
+          size={14}
+          label={`${row.issue.progress.done} of ${row.issue.progress.total} done`}
+        />
       ) : null}
     </div>
   );

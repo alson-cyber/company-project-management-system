@@ -1,3 +1,5 @@
+import { DashboardSkeleton } from "@/components/ui/skeleton";
+
 export default function LoadingProject() {
-  return <p className="text-sm text-muted">Loading project…</p>;
+  return <DashboardSkeleton label="Loading project…" tiles={4} />;
 }

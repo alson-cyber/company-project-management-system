@@ -6,7 +6,7 @@ type Size = "md" | "lg";
 
 const variants: Record<Variant, string> = {
   primary:
-    "bg-accent text-white shadow-[0_1px_2px_rgba(60,86,219,0.25)] hover:bg-accent-strong disabled:bg-accent/60",
+    "bg-accent text-on-accent shadow-card hover:bg-accent-strong disabled:bg-accent/60",
   secondary: "border border-line bg-surface text-ink hover:border-line-strong hover:bg-surface-2",
   quiet: "text-muted hover:bg-surface-3 hover:text-ink",
 };
@@ -16,9 +16,12 @@ const sizes: Record<Size, string> = {
   lg: "h-11 px-4 text-sm",
 };
 
-export function buttonClasses({ variant = "primary", size = "md" }: { variant?: Variant; size?: Size } = {}): string {
+export function buttonClasses({
+  variant = "primary",
+  size = "md",
+}: { variant?: Variant; size?: Size } = {}): string {
   return cn(
-    "inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors",
+    "inline-flex items-center justify-center gap-2 rounded-md font-medium transition-[background-color,border-color,color,box-shadow,transform] duration-150 active:scale-[0.97]",
     "disabled:cursor-not-allowed disabled:opacity-70",
     variants[variant],
     sizes[size],

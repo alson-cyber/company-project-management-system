@@ -1,3 +1,5 @@
+import { ListSkeleton } from "@/components/ui/skeleton";
+
 export default function LoadingFiles() {
-  return <p className="text-sm text-muted">Loading files…</p>;
+  return <ListSkeleton label="Loading files…" rows={5} />;
 }

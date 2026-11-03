@@ -1,3 +1,5 @@
+import { ListSkeleton } from "@/components/ui/skeleton";
+
 export default function LoadingTimeline() {
-  return <p className="text-sm text-muted">Loading timeline…</p>;
+  return <ListSkeleton label="Loading timeline…" />;
 }
