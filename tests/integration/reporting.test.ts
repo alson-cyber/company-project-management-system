@@ -6,7 +6,7 @@ import { listScopedActivity } from "@/modules/activity/activity.queries";
 import { loadExecutivePortfolio, loadVisibleIssueFacts, loadVisiblePortfolio } from "@/modules/reporting/portfolio.queries";
 import { applyIssueFilters, overdueRows, statusCounts } from "@/modules/reporting/report.derive";
 import { parseReportFilters } from "@/modules/reporting/reports.model";
-import { listVisibleCompletionEvidence } from "@/modules/reporting/trend.queries";
+import { companyToday, listVisibleCompletionEvidence } from "@/modules/reporting/trend.queries";
 import { toCsv } from "@/modules/reporting/csv";
 import { getEnv } from "@/server/env";
 import { authContextFor, emails, testDb } from "./helpers";
@@ -98,7 +98,7 @@ describe("executive reporting", () => {
 
   test("completion credit stays with the person who completed the work", async () => {
     const executive = await authContextFor(emails.executive);
-    const filters = parseReportFilters({ range: "90" }, "2026-10-17");
+    const filters = parseReportFilters({ range: "90" }, companyToday());
     const before = await listVisibleCompletionEvidence(executive, filters, 50);
     const credited = before.find((row) => row.actorUserId);
     expect(credited?.actorUserId).toBeTruthy();
