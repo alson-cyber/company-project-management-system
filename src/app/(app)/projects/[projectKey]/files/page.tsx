@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProjectIssueLink } from "@/components/projects/project-issue-link";
 import { ProjectWorkspaceHeader } from "@/components/projects/project-workspace-header";
+import { FilterInput, FilterSelect, filterLabelClass } from "@/components/ui/filter-fields";
 import { formatBytes, formatDateTime } from "@/components/ui/format";
 import { getVisibleProjectByKey } from "@/modules/projects/project.queries";
 import { canPreviewAttachment, type AttachmentKind } from "@/modules/projects/workspace.model";
@@ -57,35 +58,30 @@ export default async function FilesPage({
     <>
       <ProjectWorkspaceHeader project={project} current="files" />
       <form method="get" aria-label="File filters" className="mb-4 flex flex-wrap items-end gap-2">
-        <label className="grid min-w-52 flex-1 gap-1 text-xs font-medium text-muted">
+        <label className={`${filterLabelClass} min-w-52 flex-1`}>
           Search filename
-          <input
-            name="q"
-            defaultValue={first(query.q)}
-            aria-label="Search filename"
-            className="h-10 border border-line bg-surface px-2 text-sm text-ink"
-          />
+          <FilterInput name="q" defaultValue={first(query.q)} aria-label="Search filename" />
         </label>
-        <label className="grid gap-1 text-xs font-medium text-muted">
+        <label className={`${filterLabelClass} min-w-44`}>
           Type
-          <select name="kind" defaultValue={kind} aria-label="Type" className="h-10 min-w-32 border border-line bg-surface px-2 text-sm">
+          <FilterSelect name="kind" defaultValue={kind} aria-label="Type">
             {KINDS.map((option) => (
               <option key={option.label} value={option.value}>
                 {option.label}
               </option>
             ))}
-          </select>
+          </FilterSelect>
         </label>
-        <label className="grid gap-1 text-xs font-medium text-muted">
+        <label className={`${filterLabelClass} min-w-44`}>
           Uploaded by
-          <select name="uploader" defaultValue={uploader} aria-label="Uploaded by" className="h-10 min-w-40 border border-line bg-surface px-2 text-sm">
+          <FilterSelect name="uploader" defaultValue={uploader} aria-label="Uploaded by">
             <option value="">Anyone</option>
             {uploaders.map(([id, name]) => (
               <option key={id} value={id}>
                 {name}
               </option>
             ))}
-          </select>
+          </FilterSelect>
         </label>
         <button type="submit" className="h-10 px-3 text-[13px] font-semibold text-accent-strong hover:underline">
           Apply

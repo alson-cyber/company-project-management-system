@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import type { IssuePriority } from "@/generated/prisma/enums";
 import { ProjectBoard } from "@/components/projects/project-board";
 import { ProjectWorkspaceHeader } from "@/components/projects/project-workspace-header";
+import { FilterSelect, filterLabelClass } from "@/components/ui/filter-fields";
 import { ISSUE_PRIORITIES, ISSUE_PRIORITY_LABELS, ISSUE_TYPE_LABELS } from "@/modules/issues/issue.constants";
 import { getVisibleProjectByKey } from "@/modules/projects/project.queries";
 import {
@@ -127,11 +128,11 @@ function Filter({
   children: ReactNode;
 }) {
   return (
-    <label className="grid gap-1 text-xs font-medium text-muted">
+    <label className={`${filterLabelClass} min-w-44`}>
       {label}
-      <select name={name} defaultValue={defaultValue} aria-label={label} className="h-10 min-w-36 rounded-md border border-line bg-surface px-2 text-sm text-ink">
+      <FilterSelect name={name} defaultValue={defaultValue} aria-label={label}>
         {children}
-      </select>
+      </FilterSelect>
     </label>
   );
 }

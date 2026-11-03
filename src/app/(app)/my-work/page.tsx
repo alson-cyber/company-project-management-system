@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AutoSubmitForm } from "@/components/my-work/filter-panel";
 import { QuickStatus } from "@/components/my-work/quick-status";
 import { cn } from "@/components/ui/cn";
+import { FilterSelect, filterLabelClass } from "@/components/ui/filter-fields";
 import { EmptyState } from "@/components/ui/empty-state";
 import { formatDate } from "@/components/ui/format";
 import { ISSUE_TYPE_STYLES, IssuePriorityBadge, IssueStatusDot, IssueTypeIcon } from "@/components/ui/issue-badges";
@@ -546,16 +547,11 @@ function SegmentLink({ href, current, children }: { href: string; current: boole
 
 function Filter({ label, name, value, children }: { label: string; name: string; value: string; children: ReactNode }) {
   return (
-    <label className="grid gap-1 text-xs font-medium text-muted">
+    <label className={`${filterLabelClass} min-w-44`}>
       {label}
-      <select
-        name={name}
-        defaultValue={value}
-        aria-label={label}
-        className="h-9 min-w-36 rounded-md border border-line bg-surface px-2 text-sm text-ink"
-      >
+      <FilterSelect name={name} defaultValue={value} aria-label={label}>
         {children}
-      </select>
+      </FilterSelect>
     </label>
   );
 }

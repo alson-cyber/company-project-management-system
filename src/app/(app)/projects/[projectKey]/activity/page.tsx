@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { ProjectIssueLink } from "@/components/projects/project-issue-link";
 import { ProjectWorkspaceHeader } from "@/components/projects/project-workspace-header";
 import { ReportFilterForm } from "@/components/reporting/report-filter-form";
+import { FilterInput, FilterSelect, filterLabelClass } from "@/components/ui/filter-fields";
 import { formatDate } from "@/components/ui/format";
 import { addCalendarDays, calendarDayInTimeZone } from "@/lib/calendar";
 import { activityActionLabel, activityDetail, activityKind, describeActivity } from "@/modules/activity/activity.format";
@@ -84,20 +85,6 @@ function groupByDay(rows: ProjectActivityRow[], timeZone: string, today: string)
   return groups;
 }
 
-/** Same rounded box for every field. Fill, border and text are set explicitly so the browser's defaults never show through. */
-const fieldClass =
-  "h-10 w-full min-w-0 appearance-none rounded-xl border border-line-strong bg-surface-2 px-3 text-sm text-ink placeholder:text-muted-2 outline-none transition-colors hover:border-muted-2 focus:border-accent focus:ring-3 focus:ring-accent/15 selection:bg-accent-soft";
-
-const labelClass = "grid gap-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-2";
-
-function Chevron() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 16 16" className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted" fill="none" stroke="currentColor" strokeWidth="1.6">
-      <path d="M4 6l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 export default async function ActivityPage({
   params,
   searchParams,
@@ -167,45 +154,39 @@ export default async function ActivityPage({
       <p className="mb-5 text-xs text-muted">Recorded changes for this project. This is history, not an inbox.</p>
 
       <ReportFilterForm label="Activity filters" className="grid grid-cols-2 items-end gap-x-3 gap-y-4 border-b border-line pb-5 sm:grid-cols-3 lg:grid-cols-6">
-        <label className={labelClass}>
+        <label className={filterLabelClass}>
           Person
-          <span className="relative block">
-            <select name="person" defaultValue={person} aria-label="Person" className={fieldClass}>
-              <option value="">Anyone</option>
-              {project.members.map((member) => (
-                <option key={member.userId} value={member.userId}>
-                  {member.name}
-                </option>
-              ))}
-            </select>
-            <Chevron />
-          </span>
+          <FilterSelect name="person" defaultValue={person} aria-label="Person">
+            <option value="">Anyone</option>
+            {project.members.map((member) => (
+              <option key={member.userId} value={member.userId}>
+                {member.name}
+              </option>
+            ))}
+          </FilterSelect>
         </label>
-        <label className={labelClass}>
+        <label className={filterLabelClass}>
           Action
-          <span className="relative block">
-            <select name="action" defaultValue={action} aria-label="Action" className={fieldClass}>
-              <option value="">Any action</option>
-              {ACTIVITY_ACTIONS.map((item) => (
-                <option key={item} value={item}>
-                  {activityActionLabel(item)}
-                </option>
-              ))}
-            </select>
-            <Chevron />
-          </span>
+          <FilterSelect name="action" defaultValue={action} aria-label="Action">
+            <option value="">Any action</option>
+            {ACTIVITY_ACTIONS.map((item) => (
+              <option key={item} value={item}>
+                {activityActionLabel(item)}
+              </option>
+            ))}
+          </FilterSelect>
         </label>
-        <label className={labelClass}>
+        <label className={filterLabelClass}>
           Issue
-          <input name="issue" defaultValue={issue} placeholder="e.g. AQUA-8" aria-label="Issue" className={fieldClass} />
+          <FilterInput name="issue" defaultValue={issue} placeholder="e.g. AQUA-8" aria-label="Issue" />
         </label>
-        <label className={labelClass}>
+        <label className={filterLabelClass}>
           From
-          <input name="from" type="date" defaultValue={from} aria-label="From" className={fieldClass} />
+          <FilterInput name="from" type="date" defaultValue={from} aria-label="From" />
         </label>
-        <label className={labelClass}>
+        <label className={filterLabelClass}>
           To
-          <input name="to" type="date" defaultValue={to} aria-label="To" className={fieldClass} />
+          <FilterInput name="to" type="date" defaultValue={to} aria-label="To" />
         </label>
         <button
           type="submit"
