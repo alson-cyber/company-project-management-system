@@ -114,6 +114,45 @@ export async function listFilteredProjectActivity(
   return rows.map((row) => toView(row));
 }
 
+export interface ProjectActivityPage {
+  rows: ProjectActivityRow[];
+  nextCursor: string | null;
+}
+
+/** One newest-first page of a project's activity. Keyset cursor, so paging stays stable as new events arrive. */
+export async function listProjectActivityPage(
+  ctx: AuthContext,
+  projectId: string,
+  filter: ProjectActivityFilter,
+  options: { cursor?: string; take?: number } = {},
+): Promise<ProjectActivityPage> {
+  assertProjectPermission(ctx, "project.view", projectId);
+  const take = Math.min(Math.max(options.take ?? ACTIVITY_PAGE_SIZE, 1), ACTIVITY_EXPORT_LIMIT);
+  const cursor = readCursor(options.cursor);
+  const rows = await prisma.activityEvent.findMany({
+    where: {
+      ...activityWhere(ctx, projectId, filter),
+      ...(cursor
+        ? {
+            OR: [
+              { occurredAt: { lt: cursor.occurredAt } },
+              { occurredAt: cursor.occurredAt, id: { lt: cursor.id } },
+            ],
+          }
+        : {}),
+    },
+    orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
+    take: take + 1,
+    select: activitySelect,
+  });
+  const page = rows.slice(0, take);
+  const last = page.at(-1);
+  return {
+    rows: page.map((row) => toView(row)),
+    nextCursor: rows.length > take && last ? activityCursor(last.occurredAt, last.id) : null,
+  };
+}
+
 export interface LatestContribution {
   id: string;
   occurredAt: Date;
