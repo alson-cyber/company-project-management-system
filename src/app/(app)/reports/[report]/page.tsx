@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Distribution } from "@/components/reporting/distribution";
 import { ActivityLog } from "@/components/reporting/activity-log";
-import { FilterField, TextFilter } from "@/components/reporting/filters";
+import { DateFilter, FilterField } from "@/components/reporting/filters";
 import { formatDate, formatDateTime } from "@/components/ui/format";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -217,8 +217,8 @@ function FilterBar({
             <option value="90">Last 90 days</option>
             <option value="custom">Custom</option>
           </FilterField>
-          <TextFilter label="From" name="from" value={filters.range === "custom" ? filters.from : ""} />
-          <TextFilter label="To" name="to" value={filters.range === "custom" ? filters.to : ""} />
+          <DateFilter label="From" name="from" value={filters.range === "custom" ? filters.from : ""} />
+          <DateFilter label="To" name="to" value={filters.range === "custom" ? filters.to : ""} />
         </>
       ) : null}
       <button

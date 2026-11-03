@@ -19,3 +19,19 @@ export function TextFilter({ label, name, value }: { label: string; name: string
     </label>
   );
 }
+
+/** A calendar date picker. The browser shows a calendar and always sends YYYY-MM-DD. */
+export function DateFilter({ label, name, value }: { label: string; name: string; value: string }) {
+  return (
+    <label className="grid gap-1 text-xs font-medium text-muted">
+      {label}
+      <input
+        type="date"
+        name={name}
+        defaultValue={value}
+        aria-label={label}
+        className="h-10 w-40 border border-line bg-surface px-2 text-sm text-ink"
+      />
+    </label>
+  );
+}
