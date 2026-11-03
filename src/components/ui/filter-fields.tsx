@@ -5,7 +5,7 @@ export const filterLabelClass = "grid gap-1.5 text-[11px] font-semibold uppercas
 
 /** The one look for filter fields: a soft rounded box with explicit fill, border and text colour, so browser defaults never show through. */
 export const filterControlClass =
-  "h-10 w-full min-w-0 appearance-none rounded-xl border border-line-strong bg-surface-2 px-3 text-sm text-ink placeholder:text-muted-2 outline-none transition-colors hover:border-muted-2 focus:border-accent focus:ring-3 focus:ring-accent/15 selection:bg-accent-soft";
+  "h-10 w-full min-w-0 appearance-none rounded-xl border border-line-strong bg-surface-2 px-3 text-sm font-normal text-muted placeholder:text-muted-2 outline-none transition-colors hover:border-muted-2 focus:border-accent focus:text-ink focus:ring-3 focus:ring-accent/15";
 
 function Chevron() {
   return (
@@ -18,7 +18,7 @@ function Chevron() {
 export function FilterSelect({ className = "", children, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <span className="relative block">
-      <select {...props} className={`${filterControlClass} ${className}`}>
+      <select {...props} className={`${filterControlClass} pr-9 ${className}`}>
         {children}
       </select>
       <Chevron />
