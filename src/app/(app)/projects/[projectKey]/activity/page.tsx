@@ -43,6 +43,24 @@ function activityHref(projectKey: string, params: Record<string, string | undefi
   return `/projects/${projectKey}/activity${query ? `?${query}` : ""}`;
 }
 
+/** One colour per kind of change, so rows read apart at a glance. Unknown kinds stay neutral. */
+function kindTone(kind: string): string {
+  switch (kind) {
+    case "ISSUE":
+      return "text-info";
+    case "STATUS":
+      return "text-success";
+    case "COMMENT":
+      return "text-purple";
+    case "FILE":
+      return "text-teal";
+    case "PROJECT":
+      return "text-warning";
+    default:
+      return "text-muted";
+  }
+}
+
 interface DayGroup {
   key: string;
   label: string;
@@ -65,6 +83,9 @@ function groupByDay(rows: ProjectActivityRow[], timeZone: string, today: string)
   }
   return groups;
 }
+
+const fieldClass =
+  "h-9 w-full min-w-0 border-0 border-b border-line-strong bg-transparent px-0.5 text-sm text-ink outline-none transition-colors focus:border-ink";
 
 export default async function ActivityPage({
   params,
@@ -132,11 +153,12 @@ export default async function ActivityPage({
   return (
     <>
       <ProjectWorkspaceHeader project={project} current="activity" />
-      <p className="mb-3 text-xs text-muted">Recorded changes for this project. This is history, not an inbox.</p>
-      <ReportFilterForm label="Activity filters" className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 lg:items-end">
-        <label className="grid gap-1 text-xs font-medium text-muted">
+      <p className="mb-5 text-xs text-muted">Recorded changes for this project. This is history, not an inbox.</p>
+
+      <ReportFilterForm label="Activity filters" className="grid grid-cols-2 items-end gap-x-6 gap-y-4 border-b border-line pb-5 sm:grid-cols-3 lg:grid-cols-6">
+        <label className="grid gap-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-2">
           Person
-          <select name="person" defaultValue={person} aria-label="Person" className="h-10 w-full min-w-0 border border-line bg-surface px-2 text-sm">
+          <select name="person" defaultValue={person} aria-label="Person" className={fieldClass}>
             <option value="">Anyone</option>
             {project.members.map((member) => (
               <option key={member.userId} value={member.userId}>
@@ -145,9 +167,9 @@ export default async function ActivityPage({
             ))}
           </select>
         </label>
-        <label className="grid gap-1 text-xs font-medium text-muted">
+        <label className="grid gap-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-2">
           Action
-          <select name="action" defaultValue={action} aria-label="Action" className="h-10 w-full min-w-0 border border-line bg-surface px-2 text-sm">
+          <select name="action" defaultValue={action} aria-label="Action" className={fieldClass}>
             <option value="">Any action</option>
             {ACTIVITY_ACTIONS.map((item) => (
               <option key={item} value={item}>
@@ -156,37 +178,31 @@ export default async function ActivityPage({
             ))}
           </select>
         </label>
-        <label className="grid gap-1 text-xs font-medium text-muted">
+        <label className="grid gap-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-2">
           Issue
-          <input
-            name="issue"
-            defaultValue={issue}
-            placeholder="Key"
-            aria-label="Issue"
-            className="h-10 w-full min-w-0 border border-line bg-surface px-2 text-sm"
-          />
+          <input name="issue" defaultValue={issue} placeholder="e.g. AQUA-8" aria-label="Issue" className={fieldClass} />
         </label>
-        <label className="grid gap-1 text-xs font-medium text-muted">
+        <label className="grid gap-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-2">
           From
-          <input name="from" type="date" defaultValue={from} aria-label="From" className="h-10 w-full min-w-0 border border-line bg-surface px-2 text-sm" />
+          <input name="from" type="date" defaultValue={from} aria-label="From" className={fieldClass} />
         </label>
-        <label className="grid gap-1 text-xs font-medium text-muted">
+        <label className="grid gap-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-2">
           To
-          <input name="to" type="date" defaultValue={to} aria-label="To" className="h-10 w-full min-w-0 border border-line bg-surface px-2 text-sm" />
+          <input name="to" type="date" defaultValue={to} aria-label="To" className={fieldClass} />
         </label>
-        <button type="submit" className="h-10 w-full bg-accent px-3 text-[13px] font-semibold text-on-accent hover:opacity-90">
+        <button type="submit" className="h-9 justify-self-start text-[13px] font-semibold text-accent-strong underline-offset-4 hover:underline">
           Apply
         </button>
       </ReportFilterForm>
 
       {filtering ? (
-        <ul aria-label="Active filters" className="mb-4 flex flex-wrap items-center gap-2">
+        <ul aria-label="Active filters" className="mt-4 flex flex-wrap items-center gap-2">
           {chips.map((chip) => (
             <li key={chip.label}>
               <Link
                 href={chip.href}
                 title="Remove this filter"
-                className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-1 text-xs hover:border-line-strong"
+                className="inline-flex items-center gap-1.5 rounded-full bg-surface-3 px-2.5 py-1 text-xs text-ink hover:bg-line"
               >
                 {chip.label}
                 <span aria-hidden="true" className="text-muted">
@@ -196,67 +212,78 @@ export default async function ActivityPage({
             </li>
           ))}
           <li>
-            <Link href={`/projects/${project.key}/activity`} className="px-1 text-xs font-medium text-accent-strong hover:underline">
+            <Link href={`/projects/${project.key}/activity`} className="px-1 text-xs text-muted underline-offset-4 hover:text-ink hover:underline">
               Clear all
             </Link>
           </li>
         </ul>
       ) : null}
 
-      <p className="mb-2 text-xs text-muted">
+      <p className="mt-5 text-xs text-muted-2">
         {count === 0
           ? filtering
             ? "No activity matches these filters."
             : "No activity yet."
-          : `Showing ${count} ${count === 1 ? "change" : "changes"}, newest first${page.nextCursor ? "" : filtering ? " for these filters" : ""}.`}
+          : `${count} ${count === 1 ? "change" : "changes"}, newest first${page.nextCursor ? "" : filtering ? " for these filters" : ""}.`}
       </p>
 
       {groups.map((group) => (
-        <section key={group.key} aria-label={group.label}>
-          <h2 className="sticky top-0 z-10 border-b border-line bg-surface/95 py-1.5 text-xs font-semibold uppercase tracking-wide text-muted backdrop-blur">
+        <section key={group.key} aria-label={group.label} className="mt-6">
+          <h2 className="sticky top-0 z-10 flex items-center gap-3 bg-canvas/95 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-2 backdrop-blur">
             {group.label}
+            <span aria-hidden="true" className="h-px flex-1 bg-line" />
           </h2>
-          <ol className="divide-y divide-line/70">
-            {group.rows.map((event) => (
-              <li key={event.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-2.5 text-sm">
-                <span className="shrink-0 rounded-sm border border-line px-1.5 py-px text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  {activityKind(event)}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p>
-                    <span className="font-semibold">{event.actorName ?? "System"}</span>{" "}
-                    <span className="text-muted">{describeActivity(event)}</span>
-                  </p>
-                  {activityDetail(event) ? <p className="text-[13px] text-muted">{activityDetail(event)}</p> : null}
-                </div>
-                <div className="flex items-baseline gap-3 text-xs">
-                  {event.issue ? (
-                    <ProjectIssueLink
-                      projectKey={project.key}
-                      number={event.issue.number}
-                      issueKey={event.issue.key}
-                      title={event.issue.title}
-                    />
-                  ) : (
-                    <span className="text-muted">Project</span>
-                  )}
-                  <time className="tabular-nums text-muted-2" dateTime={event.occurredAt.toISOString()}>
-                    {clock.format(event.occurredAt)}
-                  </time>
-                </div>
-              </li>
-            ))}
+          <ol>
+            {group.rows.map((event) => {
+              const kind = activityKind(event);
+              const detail = activityDetail(event);
+              return (
+                <li
+                  key={event.id}
+                  className="grid gap-x-5 gap-y-1 border-b border-line/60 py-3.5 text-sm last:border-0 sm:grid-cols-[7.5rem_minmax(0,1fr)_auto] sm:items-baseline"
+                >
+                  <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] ${kindTone(kind)}`}>
+                    <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
+                    {kind}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="leading-relaxed">
+                      <span className="font-semibold text-ink">{event.actorName ?? "System"}</span>{" "}
+                      <span className="text-muted">{describeActivity(event)}</span>
+                    </p>
+                    {detail ? <p className="mt-0.5 text-[13px] leading-relaxed text-muted-2">{detail}</p> : null}
+                  </div>
+                  <div className="flex items-baseline gap-3 text-xs sm:justify-end">
+                    {event.issue ? (
+                      <ProjectIssueLink
+                        projectKey={project.key}
+                        number={event.issue.number}
+                        issueKey={event.issue.key}
+                        title={event.issue.title}
+                      />
+                    ) : (
+                      <span className="text-muted-2">Project</span>
+                    )}
+                    <time className="tabular-nums text-muted-2" dateTime={event.occurredAt.toISOString()}>
+                      {clock.format(event.occurredAt)}
+                    </time>
+                  </div>
+                </li>
+              );
+            })}
           </ol>
         </section>
       ))}
 
       {page.nextCursor ? (
-        <Link
-          href={activityHref(project.key, { ...current, cursor: page.nextCursor })}
-          className="mt-4 inline-block text-sm font-medium text-accent-strong hover:underline"
-        >
-          Older activity
-        </Link>
+        <div className="mt-8 border-t border-line pt-4">
+          <Link
+            href={activityHref(project.key, { ...current, cursor: page.nextCursor })}
+            className="text-sm font-medium text-accent-strong underline-offset-4 hover:underline"
+          >
+            Older activity →
+          </Link>
+        </div>
       ) : null}
     </>
   );
