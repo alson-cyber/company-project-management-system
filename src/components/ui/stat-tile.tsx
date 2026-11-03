@@ -88,8 +88,17 @@ export function StatTile({
   const className =
     "block rounded-[var(--radius-card)] border border-line bg-surface p-4 shadow-card transition-[box-shadow,border-color]";
   if (!href) return <div className={className}>{body}</div>;
+  const linkClass = cn(className, "hover:border-line-strong hover:shadow-lift");
+  // Same-page jumps use a plain anchor: the browser scrolls to the fragment itself, and the router's Link does not always do so.
+  if (href.startsWith("#")) {
+    return (
+      <a href={href} className={linkClass}>
+        {body}
+      </a>
+    );
+  }
   return (
-    <Link href={href} className={cn(className, "hover:border-line-strong hover:shadow-lift")}>
+    <Link href={href} className={linkClass}>
       {body}
     </Link>
   );
