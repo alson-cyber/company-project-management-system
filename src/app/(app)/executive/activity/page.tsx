@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ActivityLog } from "@/components/reporting/activity-log";
-import { FilterField, TextFilter } from "@/components/reporting/filters";
+import { DateFilter, FilterField, TextFilter } from "@/components/reporting/filters";
+import { ReportFilterForm } from "@/components/reporting/report-filter-form";
 import { PageHeader } from "@/components/ui/page-header";
 import { ACTIVITY_ACTIONS } from "@/modules/activity/activity.types";
 import { activityActionLabel } from "@/modules/activity/activity.format";
@@ -44,7 +45,7 @@ export default async function ExecutiveActivityPage({ searchParams }: { searchPa
         title="Master activity"
         description="The company audit log for projects you can see. It is append-only and paged, newest first."
       />
-      <form action="/executive/activity" className="mb-6 flex flex-wrap items-end gap-3">
+      <ReportFilterForm action="/executive/activity" className="mb-6 flex flex-wrap items-end gap-3">
         <FilterField label="Project" name="project" value={filters.projectKey ?? ""}>
           <option value="">All projects</option>
           {projects.map((item) => (
@@ -83,13 +84,13 @@ export default async function ExecutiveActivityPage({ searchParams }: { searchPa
           <option value="90">Last 90 days</option>
           <option value="custom">Custom</option>
         </FilterField>
-        <TextFilter label="From" name="from" value={filters.range === "custom" ? filters.from : ""} />
-        <TextFilter label="To" name="to" value={filters.range === "custom" ? filters.to : ""} />
+        <DateFilter label="From" name="from" value={filters.range === "custom" ? filters.from : ""} />
+        <DateFilter label="To" name="to" value={filters.range === "custom" ? filters.to : ""} />
         <TextFilter label="Issue key" name="issue" value={filters.issueKey ?? ""} />
         <button type="submit" className="h-10 px-3 text-[13px] font-semibold text-accent-strong hover:underline">
           Apply
         </button>
-      </form>
+      </ReportFilterForm>
       <p className="mb-3 text-xs text-muted">
         {filters.from} to {filters.to}, company time. {page.rows.length} events on this page.
       </p>

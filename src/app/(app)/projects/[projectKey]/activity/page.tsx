@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ProjectIssueLink } from "@/components/projects/project-issue-link";
 import { ProjectWorkspaceHeader } from "@/components/projects/project-workspace-header";
+import { ReportFilterForm } from "@/components/reporting/report-filter-form";
 import { formatDateTime } from "@/components/ui/format";
 import { activityActionLabel, activityDetail, activityKind, describeActivity } from "@/modules/activity/activity.format";
 import { isActivityAction, listFilteredProjectActivity, type ProjectActivityFilter } from "@/modules/activity/activity.queries";
@@ -58,7 +59,7 @@ export default async function ActivityPage({
     <>
       <ProjectWorkspaceHeader project={project} current="activity" />
       <p className="mb-3 text-xs text-muted">Recorded changes for this project. This is history, not an inbox.</p>
-      <form method="get" aria-label="Activity filters" className="mb-4 flex flex-wrap items-end gap-2">
+      <ReportFilterForm label="Activity filters" className="mb-4 flex flex-wrap items-end gap-2">
         <label className="grid gap-1 text-xs font-medium text-muted">
           Person
           <select name="person" defaultValue={person} aria-label="Person" className="h-10 min-w-40 border border-line bg-surface px-2 text-sm">
@@ -107,7 +108,7 @@ export default async function ActivityPage({
             Reset
           </a>
         ) : null}
-      </form>
+      </ReportFilterForm>
       {events.length === 0 ? (
         <p className="text-sm text-muted">{filtering ? "No activity matches these filters." : "No activity yet."}</p>
       ) : (

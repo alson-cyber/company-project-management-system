@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Distribution } from "@/components/reporting/distribution";
 import { ActivityLog } from "@/components/reporting/activity-log";
 import { DateFilter, FilterField } from "@/components/reporting/filters";
+import { ReportFilterForm } from "@/components/reporting/report-filter-form";
 import { formatDate, formatDateTime } from "@/components/ui/format";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -155,7 +156,7 @@ function FilterBar({
   usesDateRange: boolean;
 }) {
   return (
-    <form
+    <ReportFilterForm
       action={`/reports/${report}`}
       className="mb-6 flex flex-wrap items-end gap-3 rounded-[var(--radius-card)] border border-line bg-surface p-4 shadow-card"
     >
@@ -227,7 +228,7 @@ function FilterBar({
       >
         Apply filters
       </button>
-    </form>
+    </ReportFilterForm>
   );
 }
 
