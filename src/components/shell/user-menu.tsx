@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { authClient } from "@/lib/auth-client";
 import { Avatar } from "@/components/ui/avatar";
@@ -14,6 +15,7 @@ const THEME_OPTIONS: Array<{ value: ThemeChoice; label: string }> = [
 ];
 
 export function UserMenu({ name, email, roles }: { name: string; email: string; roles: string[] }) {
+  const router = useRouter();
   const theme = useSyncExternalStore(subscribeTheme, getTheme, () => "system" as ThemeChoice);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,8 +35,8 @@ export function UserMenu({ name, email, roles }: { name: string; email: string; 
       setError("Could not sign out. Try again.");
       return;
     }
-    // Full navigation so the signed-in shell is not restored from the client cache.
-    window.location.assign("/login");
+    router.refresh();
+    router.push("/login");
   }
 
   return (
@@ -88,8 +90,7 @@ export function UserMenu({ name, email, roles }: { name: string; email: string; 
             disabled={pending}
             className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm outline-none data-[disabled]:opacity-60 data-[highlighted]:bg-surface-3"
             onSelect={(event) => {
-              // Keep the menu mounted. Closing it on select unmounts a nested submit form
-              // before the browser can submit, so the session is never cleared.
+              // Keep the menu open until the request finishes, so the pending state stays visible.
               event.preventDefault();
               void signOut();
             }}
