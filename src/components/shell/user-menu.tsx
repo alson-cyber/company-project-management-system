@@ -1,8 +1,8 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { signOutAction } from "@/app/actions/session";
+import { authClient } from "@/lib/auth-client";
 import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/shell/icons";
 import { getTheme, setTheme, subscribeTheme, type ThemeChoice } from "@/components/shell/theme";
@@ -15,6 +15,28 @@ const THEME_OPTIONS: Array<{ value: ThemeChoice; label: string }> = [
 
 export function UserMenu({ name, email, roles }: { name: string; email: string; roles: string[] }) {
   const theme = useSyncExternalStore(subscribeTheme, getTheme, () => "system" as ThemeChoice);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function signOut() {
+    setError(null);
+    setPending(true);
+    try {
+      const { error: signOutError } = await authClient.signOut();
+      if (signOutError) {
+        setPending(false);
+        setError("Could not sign out. Try again.");
+        return;
+      }
+    } catch {
+      setPending(false);
+      setError("Could not sign out. Try again.");
+      return;
+    }
+    // Full navigation so the signed-in shell is not restored from the client cache.
+    window.location.assign("/login");
+  }
+
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger
@@ -57,17 +79,24 @@ export function UserMenu({ name, email, roles }: { name: string; email: string; 
             ))}
           </DropdownMenu.RadioGroup>
           <DropdownMenu.Separator className="my-1 h-px bg-line" />
-          <form action={signOutAction}>
-            <DropdownMenu.Item asChild>
-              <button
-                type="submit"
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm outline-none data-[highlighted]:bg-surface-3"
-              >
-                <Icon name="logout" className="size-4 text-muted" />
-                Sign out
-              </button>
-            </DropdownMenu.Item>
-          </form>
+          {error ? (
+            <p role="alert" className="px-2.5 py-1 text-xs text-danger">
+              {error}
+            </p>
+          ) : null}
+          <DropdownMenu.Item
+            disabled={pending}
+            className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm outline-none data-[disabled]:opacity-60 data-[highlighted]:bg-surface-3"
+            onSelect={(event) => {
+              // Keep the menu mounted. Closing it on select unmounts a nested submit form
+              // before the browser can submit, so the session is never cleared.
+              event.preventDefault();
+              void signOut();
+            }}
+          >
+            <Icon name="logout" className="size-4 text-muted" />
+            {pending ? "Signing out…" : "Sign out"}
+          </DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>
