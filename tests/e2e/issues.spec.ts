@@ -100,6 +100,7 @@ test("selecting a user story opens the inspector without leaving the hierarchy",
   await expect(page.getByRole("tab", { name: "Notes" })).toBeVisible();
   await page.getByRole("tab", { name: "Notes" }).click();
   await expect(page.getByText("No notes yet.")).toBeVisible();
+  await page.getByLabel("Note title").fill("Walk-up requests");
   await page.getByLabel("Internal note").fill("Concierge still gets walk-up requests");
   await page.getByRole("button", { name: "Status, In Progress" }).click();
   await page.getByRole("menuitem", { name: "In Review" }).click();

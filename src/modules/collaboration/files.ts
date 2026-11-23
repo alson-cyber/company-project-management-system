@@ -61,8 +61,42 @@ export function fileExtension(filename: string): string {
   return base.slice(dot + 1).toLowerCase();
 }
 
-export function isDangerousAttachment(filename: string, contentType: string): boolean {
-  return DANGEROUS_EXTENSIONS.has(fileExtension(filename)) || DANGEROUS_TYPES.has(contentType);
+export interface AttachmentDenylist {
+  extensions: ReadonlySet<string>;
+  mimeTypes: ReadonlySet<string>;
+}
+
+export const DEFAULT_DANGEROUS_EXTENSIONS = [...DANGEROUS_EXTENSIONS];
+export const DEFAULT_DANGEROUS_MIME_TYPES = [...DANGEROUS_TYPES];
+
+export function defaultAttachmentDenylist(): AttachmentDenylist {
+  return { extensions: DANGEROUS_EXTENSIONS, mimeTypes: DANGEROUS_TYPES };
+}
+
+/** Lower-case type without parameters. An unusable token is empty and is not stored. */
+export function normalizeMimeType(input: string): string {
+  const base = input.split(";")[0]?.trim().toLowerCase() ?? "";
+  return /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(base) ? base : "";
+}
+
+/**
+ * The stored type is the type detected from the bytes.
+ * When detection is inconclusive the record is opaque bytes, never the client's declaration.
+ */
+export function contentTypeFromDetection(detected: string | null): string {
+  return detected ?? "application/octet-stream";
+}
+
+export function isDangerousAttachment(input: {
+  filename: string;
+  declaredType: string;
+  detectedType: string | null;
+  denylist: AttachmentDenylist;
+}): boolean {
+  if (input.denylist.extensions.has(fileExtension(input.filename))) return true;
+  const declared = normalizeMimeType(input.declaredType);
+  if (declared && input.denylist.mimeTypes.has(declared)) return true;
+  return input.detectedType !== null && input.denylist.mimeTypes.has(input.detectedType);
 }
 
 /** Best-effort type from the first bytes. Unknown content stays opaque. */

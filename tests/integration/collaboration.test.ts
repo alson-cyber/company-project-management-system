@@ -158,7 +158,7 @@ describe("issue collaboration", () => {
       issueId: epic.id,
       filename: "../booking reference.png",
       contentType: "image/png",
-      bytes: Uint8Array.from([137, 80, 78, 71]),
+      bytes: Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     });
 
     const row = await testDb.issueAttachment.findUniqueOrThrow({ where: { id: saved.id } });
@@ -182,6 +182,7 @@ describe("issue collaboration", () => {
     await expect(openAttachment(admin, saved.id)).rejects.toBeInstanceOf(NotFoundError);
     const opened = await openAttachment(executive, saved.id);
     expect(opened.filename).toBe("booking reference.png");
+    expect(opened.contentType).toBe("image/png");
     expect(opened.inline).toBe(true);
     await opened.body.cancel();
     await expect(

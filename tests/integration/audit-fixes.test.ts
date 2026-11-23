@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from "vitest";
-import { addAttachment, addComment, addNote, removeAttachment, removeComment, updateNote } from "@/modules/collaboration/collaboration.service";
+import { addAttachment, addComment, addNote, purgeAttachment, removeAttachment, removeComment, updateNote } from "@/modules/collaboration/collaboration.service";
 import { listIssueCollaboration } from "@/modules/collaboration/collaboration.queries";
 import { changeStatus, createIssue, updateIssue } from "@/modules/issues/issue.service";
 import { addProjectMember, archiveProject, removeProjectMember, restoreProject, transferProjectLead } from "@/modules/projects/project.service";
@@ -44,6 +44,7 @@ describe("audit fixes", () => {
     });
     const row = await testDb.issueAttachment.findUniqueOrThrow({ where: { id: saved.id } });
     expect(row.checksumSha256).toHaveLength(64);
+    expect(row.contentType).toBe("application/octet-stream");
     await removeAttachment(alex, { attachmentId: saved.id });
     const storage = await getObjectStorage();
     expect(await storage.head(row.objectKey)).not.toBeNull();
@@ -55,6 +56,45 @@ describe("audit fixes", () => {
         bytes: Uint8Array.from([0x4d, 0x5a, 0x90]),
       }),
     ).rejects.toBeInstanceOf(ValidationError);
+    await expect(
+      addAttachment(alex, {
+        issueId: issue.id,
+        filename: "notes.txt",
+        contentType: "text/plain",
+        bytes: Uint8Array.from([0x4d, 0x5a, 0x90, 0x00]),
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
+    const png = await addAttachment(alex, {
+      issueId: issue.id,
+      filename: "screen.png",
+      contentType: "text/plain",
+      bytes: Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    });
+    expect(png.contentType).toBe("image/png");
+  });
+
+  test("only an admin can purge a file that was already removed, and the purge is audited", async () => {
+    const alex = await authContextFor(emails.member);
+    const admin = await authContextFor(emails.admin);
+    const project = await testDb.project.findFirstOrThrow({ where: { key: "AQUA" }, select: { id: true } });
+    const issue = await createIssue(alex, { projectId: project.id, type: "EPIC", title: "Audit purge epic" });
+    const saved = await addAttachment(alex, {
+      issueId: issue.id,
+      filename: "evidence.txt",
+      contentType: "text/plain",
+      bytes: Uint8Array.from([101, 118, 105, 100, 101, 110, 99, 101]),
+    });
+    const row = await testDb.issueAttachment.findUniqueOrThrow({ where: { id: saved.id } });
+    await expect(purgeAttachment(alex, { attachmentId: saved.id })).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(purgeAttachment(admin, { attachmentId: saved.id })).rejects.toBeInstanceOf(ValidationError);
+    expect(await testDb.activityEvent.count({ where: { entityId: saved.id, action: "issue.attachment_purged" } })).toBe(0);
+    await removeAttachment(alex, { attachmentId: saved.id });
+    await purgeAttachment(admin, { attachmentId: saved.id });
+    const storage = await getObjectStorage();
+    expect(await storage.head(row.objectKey)).toBeNull();
+    const purged = await testDb.issueAttachment.findUniqueOrThrow({ where: { id: saved.id } });
+    expect(purged.purgedAt).not.toBeNull();
+    expect(await testDb.activityEvent.count({ where: { entityId: saved.id, action: "issue.attachment_purged" } })).toBe(1);
   });
 
   test("a note keeps every revision, and a removed comment stays as a placeholder", async () => {

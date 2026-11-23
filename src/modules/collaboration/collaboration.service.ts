@@ -20,6 +20,7 @@ import {
 } from "@/modules/collaboration/collaboration.schema";
 import {
   attachmentLimitLabel,
+  contentTypeFromDetection,
   detectContentType,
   isDangerousAttachment,
   isInlineImage,
@@ -346,11 +347,17 @@ export async function addAttachment(
 
   const filename = sanitizeFilename(input.filename);
   const detected = detectContentType(input.bytes);
-  const declared = storedContentType(input.contentType);
-  if (isDangerousAttachment(filename, declared) || (detected !== null && isDangerousAttachment(filename, detected))) {
+  if (
+    isDangerousAttachment({
+      filename,
+      declaredType: input.contentType,
+      detectedType: detected,
+      denylist: { extensions: policy.dangerousExtensions, mimeTypes: policy.dangerousMimeTypes },
+    })
+  ) {
     throw new ValidationError("This file type is not allowed.");
   }
-  const contentType = detected && (isInlineImage(detected) || detected === "application/pdf") ? detected : declared;
+  const contentType = contentTypeFromDetection(detected);
   const checksumSha256 = await sha256Hex(input.bytes);
   const id = crypto.randomUUID();
   const objectKey = `attachments/${issue.id}/${id}`;

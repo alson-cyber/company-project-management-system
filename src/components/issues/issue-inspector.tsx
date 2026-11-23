@@ -68,6 +68,7 @@ export function IssueInspector({
   const pathname = usePathname();
   const { pendingField, message, patch } = useIssuePatch(issue);
   const [section, setSection] = useState(initialSection);
+  const [actionsOpen, setActionsOpen] = useState(false);
   const [syncedSection, setSyncedSection] = useState(initialSection);
   if (initialSection !== syncedSection) {
     setSyncedSection(initialSection);
@@ -142,10 +143,15 @@ export function IssueInspector({
             </span>
           </Link>
           {issue.canMutate ? (
-            <details className="relative">
-              <summary
-                className="grid size-8 cursor-pointer list-none place-items-center rounded-md text-muted transition-colors hover:bg-surface-3 hover:text-ink [&::-webkit-details-marker]:hidden"
+            <div className="relative">
+              <button
+                type="button"
+                className="grid size-8 cursor-pointer place-items-center rounded-md text-muted transition-colors hover:bg-surface-3 hover:text-ink"
+                aria-expanded={actionsOpen}
+                aria-haspopup="dialog"
+                aria-controls="issue-archive-menu"
                 title="More actions"
+                onClick={() => setActionsOpen((open) => !open)}
               >
                 <svg viewBox="0 0 16 16" className="size-4" aria-hidden="true">
                   <circle cx="3.5" cy="8" r="1.3" fill="currentColor" />
@@ -153,15 +159,22 @@ export function IssueInspector({
                   <circle cx="12.5" cy="8" r="1.3" fill="currentColor" />
                 </svg>
                 <span className="sr-only">More actions</span>
-              </summary>
-              <div className="absolute right-0 z-20 mt-1 w-72 rounded-lg border border-line bg-surface p-3 shadow-pop">
-                <h3 className="text-sm font-semibold">{issue.archivedAt ? "Restore" : "Archive"}</h3>
-                <p className="mb-2 mt-1 text-[13px] leading-relaxed text-muted">
-                  History is kept. The issue key is not reused.
-                </p>
-                <ArchiveRestoreForm issue={issue} />
-              </div>
-            </details>
+              </button>
+              {actionsOpen ? (
+                <div
+                  id="issue-archive-menu"
+                  role="dialog"
+                  aria-label={issue.archivedAt ? "Restore" : "Archive"}
+                  className="absolute right-0 z-20 mt-1 w-72 rounded-lg border border-line bg-surface p-3 shadow-pop"
+                >
+                  <h3 className="text-sm font-semibold">{issue.archivedAt ? "Restore" : "Archive"}</h3>
+                  <p className="mb-2 mt-1 text-[13px] leading-relaxed text-muted">
+                    History is kept. The issue key is not reused.
+                  </p>
+                  <ArchiveRestoreForm issue={issue} />
+                </div>
+              ) : null}
+            </div>
           ) : null}
         </div>
 

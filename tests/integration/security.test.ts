@@ -57,6 +57,8 @@ describe("security boundaries", () => {
     });
     const stored = await testDb.issueAttachment.findUniqueOrThrow({ where: { id: saved.id } });
     expect(stored.originalFilename).toBe("passwd");
+    expect(stored.contentType).toBe("application/octet-stream");
+    expect(stored.checksumSha256).toHaveLength(64);
     expect(stored.objectKey).toMatch(/^attachments\/[0-9a-f-]+\/[0-9a-f-]+$/);
     expect(stored.objectKey).not.toContain("..");
     await expect(openAttachment(emma, saved.id)).rejects.toBeInstanceOf(NotFoundError);
