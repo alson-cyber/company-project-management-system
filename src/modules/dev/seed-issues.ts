@@ -1,4 +1,5 @@
 import type { IssuePriority, IssueStatus, IssueType } from "@/generated/prisma/enums";
+import { sha256Hex } from "@/modules/collaboration/files";
 import { issueKey } from "@/modules/issues/issue.keys";
 import type { SeedUserEmail } from "@/modules/dev/dev-fixtures";
 import type { Database } from "@/server/db";
@@ -736,6 +737,7 @@ async function ensureSeedFile(
       objectKey,
       contentType: input.contentType,
       sizeBytes: input.bytes.byteLength,
+      checksumSha256: await sha256Hex(input.bytes),
     },
     select: { id: true },
   });

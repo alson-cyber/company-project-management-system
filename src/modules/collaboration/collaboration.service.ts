@@ -1,12 +1,13 @@
 import "server-only";
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma, type Prisma as PrismaTypes } from "@/generated/prisma/client";
 import { recordActivity } from "@/modules/activity/activity.service";
 import { notifyDiscussion } from "@/modules/attention/notify";
 import type { AuthContext } from "@/server/access/types";
-import { assertProjectPermission, hasProjectPermission } from "@/server/access/policy";
+import { assertProjectPermission, assertWorkspacePermission, hasProjectPermission } from "@/server/access/policy";
 import { getAttachmentPolicy, isWithinAttachmentLimit } from "@/server/config";
 import { prisma } from "@/server/db";
 import { ForbiddenError, NotFoundError, ValidationError, parseInput } from "@/server/errors";
+import { runAttachmentPurge, type PurgeLedger } from "@/modules/collaboration/purge";
 import { getObjectStorage } from "@/server/storage";
 import { issueKey } from "@/modules/issues/issue.keys";
 import {
@@ -18,9 +19,18 @@ import {
   updateCommentSchema,
   updateNoteSchema,
 } from "@/modules/collaboration/collaboration.schema";
-import { attachmentLimitLabel, isInlineImage, sanitizeFilename, storedContentType } from "@/modules/collaboration/files";
+import {
+  attachmentLimitLabel,
+  contentTypeFromDetection,
+  detectContentType,
+  isDangerousAttachment,
+  isInlineImage,
+  sanitizeFilename,
+  sha256Hex,
+  storedContentType,
+} from "@/modules/collaboration/files";
 
-type Tx = Prisma.TransactionClient;
+type Tx = PrismaTypes.TransactionClient;
 
 interface IssueRef {
   id: string;
@@ -83,7 +93,8 @@ async function writeCollaborationActivity(
       | "issue.comment_updated"
       | "issue.comment_removed"
       | "issue.attachment_added"
-      | "issue.attachment_removed";
+      | "issue.attachment_removed"
+      | "issue.attachment_purged";
     entityType: "issue_note" | "issue_comment" | "issue_attachment";
     entityId: string;
     issue: IssueRef;
@@ -113,7 +124,22 @@ export async function addNote(ctx: AuthContext, rawInput: unknown): Promise<{ id
   return prisma.$transaction(async (tx) => {
     await assertStillEditable(tx, issue.id);
     const note = await tx.issueNote.create({
-      data: { issueId: issue.id, authorId: ctx.userId, content: input.content },
+      data: {
+        issueId: issue.id,
+        authorId: ctx.userId,
+        title: input.title,
+        category: input.category,
+        content: input.content,
+        revisions: {
+          create: {
+            revision: 1,
+            title: input.title,
+            category: input.category,
+            content: input.content,
+            editedById: ctx.userId,
+          },
+        },
+      },
       select: { id: true, content: true },
     });
     await writeCollaborationActivity(tx, ctx, {
@@ -141,17 +167,44 @@ export async function updateNote(ctx: AuthContext, rawInput: unknown): Promise<{
   const input = parseInput(updateNoteSchema, rawInput);
   const note = await prisma.issueNote.findFirst({
     where: { id: input.noteId, deletedAt: null, issue: { project: { workspaceId: ctx.workspace.id } } },
-    select: { id: true, content: true, authorId: true, issueId: true },
+    select: {
+      id: true,
+      title: true,
+      category: true,
+      content: true,
+      authorId: true,
+      issueId: true,
+      _count: { select: { revisions: true } },
+    },
   });
   if (!note) throw new NotFoundError("Note not found.");
   const issue = await loadIssue(ctx, note.issueId, "project.participate");
   assertEditable(issue);
   assertCanRevise(ctx, issue.projectId, note.authorId);
-  if (note.content === input.content) return { changed: false };
+  if (note.title === input.title && note.category === input.category && note.content === input.content) {
+    return { changed: false };
+  }
 
   await prisma.$transaction(async (tx) => {
     await assertStillEditable(tx, issue.id);
-    await tx.issueNote.update({ where: { id: note.id }, data: { content: input.content } });
+    const revision = note._count.revisions + 1;
+    await tx.issueNote.update({
+      where: { id: note.id },
+      data: {
+        title: input.title,
+        category: input.category,
+        content: input.content,
+        revisions: {
+          create: {
+            revision,
+            title: input.title,
+            category: input.category,
+            content: input.content,
+            editedById: ctx.userId,
+          },
+        },
+      },
+    });
     await writeCollaborationActivity(tx, ctx, {
       action: "issue.note_updated",
       entityType: "issue_note",
@@ -294,7 +347,19 @@ export async function addAttachment(
   }
 
   const filename = sanitizeFilename(input.filename);
-  const contentType = storedContentType(input.contentType);
+  const detected = detectContentType(input.bytes);
+  if (
+    isDangerousAttachment({
+      filename,
+      declaredType: input.contentType,
+      detectedType: detected,
+      denylist: { extensions: policy.dangerousExtensions, mimeTypes: policy.dangerousMimeTypes },
+    })
+  ) {
+    throw new ValidationError("This file type is not allowed.");
+  }
+  const contentType = contentTypeFromDetection(detected);
+  const checksumSha256 = await sha256Hex(input.bytes);
   const id = crypto.randomUUID();
   const objectKey = `attachments/${issue.id}/${id}`;
   const storage = await getObjectStorage();
@@ -312,6 +377,7 @@ export async function addAttachment(
           objectKey,
           contentType,
           sizeBytes: input.bytes.byteLength,
+          checksumSha256,
         },
       });
       await writeCollaborationActivity(tx, ctx, {
@@ -341,13 +407,6 @@ export async function removeAttachment(ctx: AuthContext, rawInput: unknown): Pro
   assertEditable(issue);
   assertCanRevise(ctx, issue.projectId, attachment.uploadedById);
 
-  const storage = await getObjectStorage();
-  await storage.delete(attachment.objectKey);
-  const remaining = await storage.head(attachment.objectKey);
-  if (remaining) {
-    throw new ValidationError("The stored file could not be deleted. The attachment is still available.");
-  }
-
   await prisma.$transaction(async (tx) => {
     await assertStillEditable(tx, issue.id);
     await tx.issueAttachment.update({ where: { id: attachment.id }, data: { deletedAt: new Date() } });
@@ -374,7 +433,12 @@ export interface OpenedAttachment {
 export async function openAttachment(ctx: AuthContext, attachmentId: string): Promise<OpenedAttachment> {
   const parsed = parseInput(attachmentIdSchema, { attachmentId });
   const attachment = await prisma.issueAttachment.findFirst({
-    where: { id: parsed.attachmentId, deletedAt: null, issue: { project: { workspaceId: ctx.workspace.id } } },
+    where: {
+      id: parsed.attachmentId,
+      deletedAt: null,
+      purgedAt: null,
+      issue: { project: { workspaceId: ctx.workspace.id } },
+    },
     select: {
       originalFilename: true,
       objectKey: true,
@@ -398,4 +462,101 @@ export async function openAttachment(ctx: AuthContext, attachmentId: string): Pr
     inline: isInlineImage(contentType),
     body: object.body,
   };
+}
+
+export interface RemovedAttachment {
+  id: string;
+  filename: string;
+  projectKey: string;
+  issueNumber: number;
+  sizeBytes: number;
+  deletedAt: Date;
+}
+
+/** Removed files whose bytes are still stored. Admin only, and only the metadata needed to purge them. */
+export async function listRemovedAttachments(ctx: AuthContext): Promise<RemovedAttachment[]> {
+  assertWorkspacePermission(ctx, "admin.access");
+  const rows = await prisma.issueAttachment.findMany({
+    where: { deletedAt: { not: null }, purgedAt: null, issue: { project: { workspaceId: ctx.workspace.id } } },
+    orderBy: { deletedAt: "desc" },
+    take: 100,
+    select: {
+      id: true,
+      originalFilename: true,
+      sizeBytes: true,
+      deletedAt: true,
+      issue: { select: { number: true, project: { select: { key: true } } } },
+    },
+  });
+  return rows.flatMap((row) =>
+    row.deletedAt
+      ? [
+          {
+            id: row.id,
+            filename: row.originalFilename,
+            projectKey: row.issue.project.key,
+            issueNumber: row.issue.number,
+            sizeBytes: row.sizeBytes,
+            deletedAt: row.deletedAt,
+          },
+        ]
+      : [],
+  );
+}
+
+function purgeLedger(ctx: AuthContext): PurgeLedger {
+  return {
+    async request(attachmentId) {
+      return prisma.$transaction(async (tx) => {
+        const locked = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+          SELECT id FROM issue_attachments WHERE id = ${attachmentId} FOR UPDATE
+        `);
+        if (locked.length !== 1) throw new NotFoundError("Attachment not found.");
+        const attachment = await tx.issueAttachment.findFirst({
+          where: { id: attachmentId, issue: { project: { workspaceId: ctx.workspace.id } } },
+          select: {
+            id: true,
+            objectKey: true,
+            originalFilename: true,
+            deletedAt: true,
+            purgeRequestedAt: true,
+            purgedAt: true,
+            issue: { select: { id: true, projectId: true, number: true, archivedAt: true, project: { select: { key: true } } } },
+          },
+        });
+        if (!attachment) throw new NotFoundError("Attachment not found.");
+        if (!attachment.deletedAt) throw new ValidationError("Remove the file from the issue before purging it.");
+        if (attachment.purgedAt) return { state: "done" as const };
+        if (!attachment.purgeRequestedAt) {
+          await tx.issueAttachment.update({ where: { id: attachment.id }, data: { purgeRequestedAt: new Date() } });
+          await writeCollaborationActivity(tx, ctx, {
+            action: "issue.attachment_purged",
+            entityType: "issue_attachment",
+            entityId: attachment.id,
+            issue: attachment.issue,
+            before: { filename: attachment.originalFilename },
+          });
+        }
+        return { state: "pending" as const, objectKey: attachment.objectKey };
+      });
+    },
+    async markCleaned(attachmentId) {
+      await prisma.issueAttachment.updateMany({
+        where: { id: attachmentId, purgedAt: null, issue: { project: { workspaceId: ctx.workspace.id } } },
+        data: { purgedAt: new Date() },
+      });
+    },
+  };
+}
+
+/** Deletes retained bytes after a member has already removed the file. Admin only, and audited before deletion. */
+export async function purgeAttachment(
+  ctx: AuthContext,
+  rawInput: unknown,
+  storage?: { delete(key: string): Promise<void> },
+): Promise<{ purged: boolean }> {
+  assertWorkspacePermission(ctx, "admin.access");
+  const input = parseInput(attachmentIdSchema, rawInput);
+  const objects = storage ?? (await getObjectStorage());
+  return runAttachmentPurge(purgeLedger(ctx), objects, input.attachmentId);
 }

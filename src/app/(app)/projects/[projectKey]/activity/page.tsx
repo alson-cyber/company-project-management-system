@@ -6,7 +6,7 @@ import { ProjectWorkspaceHeader } from "@/components/projects/project-workspace-
 import { ReportFilterForm } from "@/components/reporting/report-filter-form";
 import { FilterInput, FilterSelect, filterLabelClass, FilterApplyButton } from "@/components/ui/filter-fields";
 import { formatDate } from "@/components/ui/format";
-import { addCalendarDays, calendarDayInTimeZone } from "@/lib/calendar";
+import { addCalendarDays, calendarDayInTimeZone, strictCalendarDay } from "@/lib/calendar";
 import { activityActionLabel, activityDetail, activityKind, describeActivity } from "@/modules/activity/activity.format";
 import {
   isActivityAction,
@@ -31,7 +31,7 @@ function first(value: string | string[] | undefined): string {
 }
 
 function isDay(value: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value);
+  return strictCalendarDay(value) !== null;
 }
 
 /** Builds this page's URL, dropping empty params. Filters survive paging and chip removal this way. */
@@ -101,8 +101,11 @@ export default async function ActivityPage({
   const person = first(query.person);
   const action = first(query.action);
   const issue = first(query.issue).trim();
-  const from = isDay(first(query.from)) ? first(query.from) : "";
-  const to = isDay(first(query.to)) ? first(query.to) : "";
+  const fromRaw = first(query.from);
+  const toRaw = first(query.to);
+  const from = isDay(fromRaw) ? fromRaw : "";
+  const to = isDay(toRaw) ? toRaw : "";
+  const invalidDate = (fromRaw.length > 0 && !from) || (toRaw.length > 0 && !to);
   const validAction = isActivityAction(action) ? action : undefined;
   const parsedKey = parseIssueKey(issue);
   const issueNumber = parsedKey?.projectKey === project.key ? parsedKey.number : /^\d+$/.test(issue) ? Number(issue) : undefined;
@@ -152,6 +155,11 @@ export default async function ActivityPage({
     <>
       <ProjectWorkspaceHeader project={project} current="activity" />
       <p className="mb-5 text-xs text-muted">Recorded changes for this project. This is history, not an inbox.</p>
+      {invalidDate ? (
+        <p role="alert" className="mb-4 text-sm font-medium text-danger">
+          That date is not a real calendar day, so it was left out of the filter.
+        </p>
+      ) : null}
 
       <ReportFilterForm label="Activity filters" className="grid grid-cols-2 items-end gap-x-3 gap-y-4 border-b border-line pb-5 sm:grid-cols-3 lg:grid-cols-6">
         <label className={filterLabelClass}>

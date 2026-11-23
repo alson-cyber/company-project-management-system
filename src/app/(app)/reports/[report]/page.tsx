@@ -9,14 +9,16 @@ import { formatDate, formatDateTime } from "@/components/ui/format";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatGrid, StatTile } from "@/components/ui/stat-tile";
+import { activityActionLabel } from "@/modules/activity/activity.format";
 import { isActivityAction, listScopedActivity } from "@/modules/activity/activity.queries";
+import { ACTIVITY_ACTIONS } from "@/modules/activity/activity.types";
 import { ISSUE_PRIORITIES, ISSUE_STATUSES, ISSUE_TYPES, ISSUE_PRIORITY_LABELS, ISSUE_STATUS_LABELS, ISSUE_TYPE_LABELS } from "@/modules/issues/issue.constants";
 import { listWorkspacePeople } from "@/modules/people/people.queries";
 import { PROJECT_HEALTH_LABELS } from "@/modules/projects/project.constants";
 import { derivePortfolio, type IssueFact, type PortfolioProject } from "@/modules/reporting/portfolio.derive";
 import { loadVisibleIssueFacts, loadVisibleProjects } from "@/modules/reporting/portfolio.queries";
 import { applyIssueFilters, assigneeRows, overdueRows, priorityRows, statusCounts, typeCounts } from "@/modules/reporting/report.derive";
-import { isReportId, parseReportFilters, REPORTS, reportQuery, type ReportFilters } from "@/modules/reporting/reports.model";
+import { filtersForReport, isReportId, parseReportFilters, REPORT_FILTERS, REPORTS, reportQuery, resolveReportProject, type ReportFilters, type ReportId } from "@/modules/reporting/reports.model";
 import { companyToday, completionTrend, listVisibleCompletionEvidence } from "@/modules/reporting/trend.queries";
 import type { AuthContext } from "@/server/access/types";
 import { requireAuthContext } from "@/server/access/session";
@@ -41,7 +43,7 @@ export default async function ReportPage({
   if (!isReportId(report)) notFound();
   const definition = REPORTS.find((item) => item.id === report)!;
   const ctx = await requireAuthContext();
-  const filters = parseReportFilters(await searchParams, companyToday());
+  const filters = filtersForReport(report, parseReportFilters(await searchParams, companyToday()));
   const timeZone = getEnv().COMPANY_TIMEZONE;
 
   // Read issues only for reports that work from them. Activity and completions read their own data,
@@ -58,6 +60,9 @@ export default async function ReportPage({
   const visibleProjectIds = (filters.projectKey ? projects.filter((project) => project.key === filters.projectKey) : projects).map(
     (project) => project.id,
   );
+  const projectScopedIssues = needsIssues
+    ? applyIssueFilters(issues, portfolio, { ...filters, assigneeId: null, status: null, priority: null, issueType: null })
+    : [];
   const filteredIssues = needsIssues ? applyIssueFilters(issues, portfolio, filters) : [];
   const query = reportQuery(filters);
   const exportHref = `/api/reports/export${query ? `${query}&` : "?"}report=${exportKind(report)}`;
@@ -95,10 +100,10 @@ export default async function ReportPage({
           <CardBody>
             {projects.length === 0 ? <p className="text-sm text-muted">You cannot see any projects, so this report is empty.</p> : null}
             {report === "progress" ? <ProgressTable projects={visibleProjects} /> : null}
-            {report === "status" ? <Distribution items={ISSUE_STATUSES.map((status) => ({ label: ISSUE_STATUS_LABELS[status], count: statusCounts(filteredIssues)[status] }))} /> : null}
+            {report === "status" ? <Distribution items={ISSUE_STATUSES.map((status) => ({ label: ISSUE_STATUS_LABELS[status], count: statusCounts(filteredIssues, projectScopedIssues)[status] }))} /> : null}
             {report === "overdue" ? <OverdueTable rows={overdueRows(filteredIssues, portfolio, timeZone)} /> : null}
             {report === "priority" ? <PriorityTable rows={priorityRows(filteredIssues, portfolio)} /> : null}
-            {report === "assignees" ? <AssigneeTable rows={assigneeRows(filteredIssues, timeZone)} /> : null}
+            {report === "assignees" ? <AssigneeTable rows={assigneeRows(filteredIssues, timeZone, new Date(), projectScopedIssues)} /> : null}
             {report === "types" ? <Distribution items={ISSUE_TYPES.map((type) => ({ label: ISSUE_TYPE_LABELS[type], count: typeCounts(filteredIssues)[type] }))} /> : null}
             {completions ? <Completions points={completions[0]} evidence={completions[1]} /> : null}
             {report === "activity" ? <ActivityReport ctx={ctx} projects={projects} filters={filters} /> : null}
@@ -152,7 +157,7 @@ function FilterBar({
   usesDateRange,
 }: {
   filters: ReportFilters;
-  report: string;
+  report: ReportId;
   projects: { id: string; key: string; name: string }[];
   people: { id: string; name: string }[];
   usesDateRange: boolean;
@@ -170,15 +175,15 @@ function FilterBar({
           </option>
         ))}
       </FilterField>
-      <FilterField label="Assignee" name="assignee" value={filters.assigneeId ?? ""}>
+      {REPORT_FILTERS[report].assignee ? <FilterField label="Assignee" name="assignee" value={filters.assigneeId ?? ""}>
         <option value="">Anyone</option>
         {people.map((person) => (
           <option key={person.id} value={person.id}>
             {person.name}
           </option>
         ))}
-      </FilterField>
-      {report === "activity" ? (
+      </FilterField> : null}
+      {REPORT_FILTERS[report].actor ? (
         <FilterField label="Person" name="actor" value={filters.actorId ?? ""}>
           <option value="">Anyone</option>
           {people.map((person) => (
@@ -188,30 +193,40 @@ function FilterBar({
           ))}
         </FilterField>
       ) : null}
-      <FilterField label="Status" name="status" value={filters.status ?? ""}>
+      {REPORT_FILTERS[report].action ? (
+        <FilterField label="Action" name="action" value={filters.action ?? ""}>
+          <option value="">Any action</option>
+          {ACTIVITY_ACTIONS.map((action) => (
+            <option key={action} value={action}>
+              {activityActionLabel(action)}
+            </option>
+          ))}
+        </FilterField>
+      ) : null}
+      {REPORT_FILTERS[report].status ? <FilterField label="Status" name="status" value={filters.status ?? ""}>
         <option value="">Any status</option>
         {ISSUE_STATUSES.map((status) => (
           <option key={status} value={status}>
             {ISSUE_STATUS_LABELS[status]}
           </option>
         ))}
-      </FilterField>
-      <FilterField label="Priority" name="priority" value={filters.priority ?? ""}>
+      </FilterField> : null}
+      {REPORT_FILTERS[report].priority ? <FilterField label="Priority" name="priority" value={filters.priority ?? ""}>
         <option value="">Any priority</option>
         {ISSUE_PRIORITIES.map((priority) => (
           <option key={priority} value={priority}>
             {ISSUE_PRIORITY_LABELS[priority]}
           </option>
         ))}
-      </FilterField>
-      <FilterField label="Issue type" name="type" value={filters.issueType ?? ""}>
+      </FilterField> : null}
+      {REPORT_FILTERS[report].type ? <FilterField label="Issue type" name="type" value={filters.issueType ?? ""}>
         <option value="">Any type</option>
         {ISSUE_TYPES.map((type) => (
           <option key={type} value={type}>
             {ISSUE_TYPE_LABELS[type]}
           </option>
         ))}
-      </FilterField>
+      </FilterField> : null}
       {usesDateRange ? (
         <>
           <FilterField label="Range" name="range" value={filters.range}>
@@ -372,7 +387,10 @@ async function ActivityReport({
   projects: { id: string; key: string }[];
   filters: ReportFilters;
 }) {
-  const project = filters.projectKey ? projects.find((item) => item.key === filters.projectKey) : undefined;
+  const project = resolveReportProject(projects, filters.projectKey);
+  if (project === null) {
+    return <ActivityLog rows={[]} empty="No activity for that project." />;
+  }
   const page = await listScopedActivity(ctx, {
     projectId: project?.id,
     actorId: filters.actorId ?? undefined,

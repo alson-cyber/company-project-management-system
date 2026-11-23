@@ -102,9 +102,14 @@ export function HierarchyWorkspace({
   const selectedId = Number.isInteger(selectedNumber) ? findSelectedId(tree, selectedNumber) : null;
   const expansion = useExpansion(projectId);
   const [filter, setFilter] = useState<IssueTreeFilter>(EMPTY_ISSUE_FILTER);
+  const [showArchived, setShowArchived] = useState(false);
   const [inspectorWidth, setInspectorWidth] = useState(360);
   const filtering = isFilterActive(filter);
-  const visibleTree = useMemo(() => filterIssueTree(tree, filter), [tree, filter]);
+  const listedTree = useMemo(
+    () => (showArchived ? tree : withoutArchived(tree, Number.isInteger(selectedNumber) ? selectedNumber : null)),
+    [tree, showArchived, selectedNumber],
+  );
+  const visibleTree = useMemo(() => filterIssueTree(listedTree, filter), [listedTree, filter]);
 
   const isOpen = (id: string) => {
     if (filtering) return true;
@@ -237,6 +242,14 @@ export function HierarchyWorkspace({
           <div className="ml-auto flex flex-wrap items-center gap-1">
             <button
               type="button"
+              aria-pressed={showArchived}
+              className="h-8 rounded-md px-2 text-[13px] font-medium text-muted hover:bg-surface-3 hover:text-ink"
+              onClick={() => setShowArchived((current) => !current)}
+            >
+              {showArchived ? "Hide archived" : "Show archived"}
+            </button>
+            <button
+              type="button"
               aria-label="Expand all"
               title="Expand all"
               className="grid size-8 place-items-center rounded-md text-muted hover:bg-surface-3 hover:text-ink"
@@ -362,6 +375,16 @@ export function HierarchyWorkspace({
   );
 }
 
+function withoutArchived(nodes: readonly IssueListItem[], keepNumber: number | null): IssueListItem[] {
+  const kept: IssueListItem[] = [];
+  for (const node of nodes) {
+    const children = withoutArchived(node.children, keepNumber);
+    if (node.archivedAt && node.number !== keepNumber && children.length === 0) continue;
+    kept.push(children === node.children ? node : { ...node, children });
+  }
+  return kept;
+}
+
 function findSelectedId(nodes: readonly IssueListItem[], number: number): string | null {
   for (const node of nodes) {
     if (node.number === number) return node.id;
@@ -471,6 +494,7 @@ function TreeRow({
             >
               {node.title}
             </span>
+            {node.archivedAt ? <span className="shrink-0 text-xs text-muted">Archived</span> : null}
           </Link>
           {node.overdue ? (
             <>

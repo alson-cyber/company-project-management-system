@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { calendarDayUtc, isDueSoon, isOverdue, parseCalendarDate, todayInTimeZone } from "@/lib/calendar";
+import { calendarDayUtc, companyDayStart, isDueSoon, isOverdue, parseCalendarDate, strictCalendarDay, todayInTimeZone } from "@/lib/calendar";
 
 describe("calendar dates", () => {
   test("DATE values stay on their UTC calendar day", () => {
@@ -25,6 +25,15 @@ describe("calendar dates", () => {
     expect(isDueSoon(due, "TO_DO", "Pacific/Kiritimati", now)).toBe(false);
     expect(isDueSoon(parseCalendarDate("2026-03-27"), "IN_PROGRESS", "UTC", now)).toBe(true);
     expect(isDueSoon(parseCalendarDate("2026-03-28"), "IN_PROGRESS", "UTC", now)).toBe(false);
+  });
+
+  test("company midnight is the zone's start, and impossible dates are rejected", () => {
+    expect(companyDayStart("2026-11-23", "Indian/Maldives").toISOString()).toBe("2026-11-22T19:00:00.000Z");
+    expect(companyDayStart("2026-03-29", "Europe/London").toISOString()).toBe("2026-03-29T00:00:00.000Z");
+    expect(companyDayStart("2026-06-01", "Europe/London").toISOString()).toBe("2026-05-31T23:00:00.000Z");
+    expect(strictCalendarDay("2026-11-23")).toBe("2026-11-23");
+    expect(strictCalendarDay("2026-99-99")).toBeNull();
+    expect(strictCalendarDay("2026-02-31")).toBeNull();
   });
 
   test("todayInTimeZone uses the supplied IANA zone", () => {

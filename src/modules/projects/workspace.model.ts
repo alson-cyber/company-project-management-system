@@ -402,20 +402,39 @@ export function visibleTimelineRows(rows: readonly TimelineRow[], collapsedIds: 
 export interface MemberFacts {
   openAssigned: AttentionItem[];
   overdueAssigned: AttentionItem[];
-  /** Completion stays with completedBy, even if the issue is later reassigned. */
+  /** Issues this person has a recorded issue.completed event for, including work later reopened or finished by someone else. */
   completed: AttentionItem[];
   created: AttentionItem[];
 }
 
-export function memberFacts(userId: string, issues: readonly WorkspaceIssue[]): MemberFacts {
+export interface CompletionCredit {
+  actorUserId: string | null;
+  issueId: string;
+}
+
+export function memberFacts(
+  userId: string,
+  issues: readonly WorkspaceIssue[],
+  completions: readonly CompletionCredit[] = [],
+  history: readonly WorkspaceIssue[] = [],
+): MemberFacts {
   const assignedOpen = issues.filter((issue) => issue.assigneeId === userId && issue.status !== "DONE");
+  const byId = new Map<string, WorkspaceIssue>();
+  for (const issue of history) byId.set(issue.id, issue);
+  for (const issue of issues) byId.set(issue.id, issue);
+  const seen = new Set<string>();
+  const completed: AttentionItem[] = [];
+  for (const credit of completions) {
+    if (credit.actorUserId !== userId || seen.has(credit.issueId)) continue;
+    const issue = byId.get(credit.issueId);
+    if (!issue) continue;
+    seen.add(credit.issueId);
+    completed.push(toAttention(issue));
+  }
   return {
     openAssigned: assignedOpen.map(toAttention),
     overdueAssigned: assignedOpen.filter((issue) => issue.overdue).map(toAttention),
-    completed: issues
-      .filter((issue) => issue.completedById === userId)
-      .sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""))
-      .map(toAttention),
+    completed,
     created: issues.filter((issue) => issue.createdById === userId).map(toAttention),
   };
 }

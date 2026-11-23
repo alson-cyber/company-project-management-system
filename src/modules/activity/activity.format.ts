@@ -87,6 +87,14 @@ export function describeActivity(event: ActivityEventView): string {
           : "member";
       return `added a ${label.toLowerCase()}`;
     }
+    case "project.member_removed":
+      return "removed a project member";
+    case "project.lead_changed":
+      return "transferred the project lead";
+    case "project.archived":
+      return "archived the project";
+    case "project.restored":
+      return "restored the project";
     case "issue.created":
       return `created ${typeLabel(field(event.after, "type"))} ${String(field(event.after, "key") ?? "")}`.trim();
     case "issue.updated": {
@@ -249,6 +257,10 @@ const ACTION_LABELS: Record<ActivityAction, string> = {
   "project.updated": "Project updated",
   "project.health_changed": "Health changed",
   "project.member_added": "Member added",
+  "project.member_removed": "Member removed",
+  "project.lead_changed": "Lead transferred",
+  "project.archived": "Project archived",
+  "project.restored": "Project restored",
   "issue.created": "Issue created",
   "issue.updated": "Issue updated",
   "issue.completed": "Issue completed",
@@ -272,6 +284,7 @@ const ACTION_LABELS: Record<ActivityAction, string> = {
   "issue.comment_removed": "Comment removed",
   "issue.attachment_added": "File uploaded",
   "issue.attachment_removed": "File removed",
+  "issue.attachment_purged": "File purged",
 };
 
 export function activityActionLabel(action: string): string {

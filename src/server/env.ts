@@ -8,6 +8,17 @@ const optionalString = z
 
 const MEGABYTE = 1024 * 1024;
 
+function parseDenylist(value: string): string[] {
+  return [
+    ...new Set(
+      value
+        .split(",")
+        .map((item) => item.trim().toLowerCase().replace(/^\./, ""))
+        .filter((item) => item.length > 0),
+    ),
+  ];
+}
+
 export const envSchema = z
   .object({
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -58,6 +69,31 @@ export const envSchema = z
       .positive()
       .max(1024 * MEGABYTE)
       .default(25 * MEGABYTE),
+
+    /**
+     * Comma-separated extensions and MIME types refused on upload.
+     * Setting either value replaces that default list.
+     */
+    ATTACHMENT_DANGEROUS_EXTENSIONS: z
+      .string()
+      .default("exe,dll,bat,cmd,com,msi,scr,ps1,vbs,jar,apk,dmg,app")
+      .transform(parseDenylist),
+    ATTACHMENT_DANGEROUS_MIME_TYPES: z
+      .string()
+      .default(
+        [
+          "application/x-msdownload",
+          "application/x-msdos-program",
+          "application/x-executable",
+          "application/x-dosexec",
+          "application/vnd.microsoft.portable-executable",
+          "application/x-sh",
+          "application/x-mach-binary",
+          "application/java-archive",
+          "application/vnd.android.package-archive",
+        ].join(","),
+      )
+      .transform(parseDenylist),
   })
   .superRefine((env, ctx) => {
     const oidc = [

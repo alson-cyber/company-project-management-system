@@ -2,7 +2,7 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import type { ProjectHealth, ProjectRole, ProjectStatus, UserStatus } from "@/generated/prisma/enums";
 import { prisma } from "@/server/db";
-import { assertWorkspacePermission, hasWorkspacePermission } from "@/server/access/policy";
+import { assertProjectPermission, assertWorkspacePermission, hasWorkspacePermission } from "@/server/access/policy";
 import type { AuthContext } from "@/server/access/types";
 
 export interface ProjectSummary {
@@ -136,6 +136,24 @@ export async function getVisibleProjectByKey(ctx: AuthContext, key: string): Pro
   };
 }
 
+/** Active workspace members who are not already on the project. Project Lead only. */
+export async function listMembershipCandidates(
+  ctx: AuthContext,
+  projectId: string,
+): Promise<{ id: string; name: string; jobTitle: string | null }[]> {
+  assertProjectPermission(ctx, "project.manage", projectId);
+  const [people, members] = await Promise.all([
+    prisma.workspaceMember.findMany({
+      where: { workspaceId: ctx.workspace.id, user: { status: "ACTIVE" } },
+      select: { user: { select: { id: true, name: true, jobTitle: true } } },
+      orderBy: { user: { name: "asc" } },
+    }),
+    prisma.projectMember.findMany({ where: { projectId }, select: { userId: true } }),
+  ]);
+  const taken = new Set(members.map((member) => member.userId));
+  return people.flatMap(({ user }) => (taken.has(user.id) ? [] : [user]));
+}
+
 /** Company-wide portfolio for the Executive view. */
 export async function listExecutivePortfolio(ctx: AuthContext): Promise<ProjectSummary[]> {
   assertWorkspacePermission(ctx, "executive.view");
@@ -155,19 +173,21 @@ export interface AdminProjectRow {
   lead: { id: string; name: string } | null;
   memberCount: number;
   createdAt: Date;
+  archivedAt: Date | null;
 }
 
 /** Project metadata needed for administration. Deliberately excludes project content. */
 export async function listProjectsForAdmin(ctx: AuthContext): Promise<AdminProjectRow[]> {
   assertWorkspacePermission(ctx, "admin.access");
   const rows = await prisma.project.findMany({
-    where: { workspaceId: ctx.workspace.id, archivedAt: null },
+    where: { workspaceId: ctx.workspace.id },
     select: {
       id: true,
       key: true,
       name: true,
       status: true,
       createdAt: true,
+      archivedAt: true,
       members: { where: { role: "LEAD" }, select: { user: { select: { id: true, name: true } } } },
       _count: { select: { members: true } },
     },

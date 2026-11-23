@@ -55,7 +55,7 @@ export default async function ProjectIssuesPage({
   if (!issue) notFound();
 
   const [{ tree }, members, activity, collaboration] = await Promise.all([
-    listProjectIssueTree(ctx, project.id),
+    listProjectIssueTree(ctx, project.id, { includeArchived: true }),
     listAssignableMembers(ctx, project.id),
     listIssueActivity(ctx, issue.id, 80),
     listIssueCollaboration(ctx, issue.id),

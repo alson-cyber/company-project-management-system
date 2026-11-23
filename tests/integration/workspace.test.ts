@@ -161,10 +161,17 @@ describe("project workspace", () => {
       title: "Workspace completion credit",
     });
     await changeStatus(sarah, created.id, "DONE");
-    await updateIssue(sarah, { issueId: created.id, assigneeId: alex.userId });
+    await changeStatus(sarah, created.id, "IN_PROGRESS");
+    await changeStatus(alex, created.id, "DONE");
+    await updateIssue(alex, { issueId: created.id, assigneeId: alex.userId });
     const after = await listProjectWorkspaceIssues(sarah, project!.id);
-    expect(memberFacts(sarah.userId, after).completed.some((item) => item.id === created.id)).toBe(true);
-    expect(memberFacts(alex.userId, after).completed.some((item) => item.id === created.id)).toBe(false);
+    const credits = await testDb.activityEvent.findMany({
+      where: { issueId: created.id, action: "issue.completed" },
+      select: { actorUserId: true, issueId: true },
+    });
+    const present = credits.flatMap((credit) => (credit.issueId ? [{ actorUserId: credit.actorUserId, issueId: credit.issueId }] : []));
+    expect(memberFacts(sarah.userId, after, present).completed.some((item) => item.id === created.id)).toBe(true);
+    expect(memberFacts(alex.userId, after, present).completed.some((item) => item.id === created.id)).toBe(true);
     expect(issues.length).toBeGreaterThan(0);
   });
 
@@ -177,7 +184,9 @@ describe("project workspace", () => {
     const bySarah = await listFilteredProjectActivity(sarah, project.id, { actorId: sarah.userId, action: "issue.completed" });
     expect(bySarah.every((event) => event.actorId === sarah.userId)).toBe(true);
 
-    const health = await setProjectHealth(sarah, { projectId: project.id, health: "AT_RISK", note: "Availability is overdue." });
+    const current = await testDb.project.findUniqueOrThrow({ where: { id: project.id }, select: { health: true } });
+    const nextHealth = current.health === "AT_RISK" ? "BLOCKED" : "AT_RISK";
+    const health = await setProjectHealth(sarah, { projectId: project.id, health: nextHealth, note: "Availability is overdue." });
     expect(health.changed).toBe(true);
     const renamed = await updateProject(sarah, {
       projectId: project.id,

@@ -11,8 +11,14 @@ function node(issue: IssueFact): ProgressIssue {
 }
 
 export function executableFacts(issues: IssueFact[]): IssueFact[] {
+  const ids = executableIdSet(issues);
+  return issues.filter((issue) => ids.has(issue.id));
+}
+
+/** Executable classification from the unfiltered project scope, so a filtered-out child cannot make its parent look executable. */
+export function executableIdSet(issues: IssueFact[]): Set<string> {
   const nodes = issues.map(node);
-  return issues.filter((issue) => isExecutable(node(issue), nodes));
+  return new Set(issues.filter((issue) => isExecutable(node(issue), nodes)).map((issue) => issue.id));
 }
 
 export function applyIssueFilters(issues: IssueFact[], projects: PortfolioProject[], filters: ReportFilters): IssueFact[] {
@@ -68,9 +74,12 @@ export function overdueRows(
     .sort((a, b) => b.overdueDays - a.overdueDays || a.key.localeCompare(b.key));
 }
 
-export function statusCounts(issues: IssueFact[]): Record<IssueStatus, number> {
+export function statusCounts(issues: IssueFact[], scope: IssueFact[] = issues): Record<IssueStatus, number> {
   const counts = { TO_DO: 0, IN_PROGRESS: 0, IN_REVIEW: 0, DONE: 0 } satisfies Record<IssueStatus, number>;
-  for (const issue of executableFacts(issues)) counts[issue.status] += 1;
+  const executable = executableIdSet(scope);
+  for (const issue of issues) {
+    if (executable.has(issue.id)) counts[issue.status] += 1;
+  }
   return counts;
 }
 
@@ -89,7 +98,12 @@ export interface AssigneeRow {
   overdue: number;
 }
 
-export function assigneeRows(issues: IssueFact[], timeZone: string, at: Date = new Date()): AssigneeRow[] {
+export function assigneeRows(
+  issues: IssueFact[],
+  timeZone: string,
+  at: Date = new Date(),
+  scope: IssueFact[] = issues,
+): AssigneeRow[] {
   const rows = new Map<string, AssigneeRow>();
   const rowFor = (issue: IssueFact) => {
     const key = issue.assigneeId ?? "";
@@ -104,7 +118,9 @@ export function assigneeRows(issues: IssueFact[], timeZone: string, at: Date = n
     rows.set(key, row);
     return row;
   };
-  for (const issue of executableFacts(issues)) {
+  const executable = executableIdSet(scope);
+  for (const issue of issues) {
+    if (!executable.has(issue.id)) continue;
     const row = rowFor(issue);
     if (issue.status === "DONE") row.done += 1;
     else {

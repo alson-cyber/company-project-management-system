@@ -14,6 +14,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { TextArea } from "@/components/ui/field";
 import { formatDateTime, toDate } from "@/components/ui/format";
+import { NOTE_CATEGORIES, NOTE_CATEGORY_LABELS } from "@/modules/collaboration/collaboration.schema";
 import { formatBytes } from "@/modules/collaboration/files";
 import type { AttachmentView, CommentView, NoteView } from "@/modules/collaboration/collaboration.queries";
 import { useRouter } from "next/navigation";
@@ -193,19 +194,148 @@ export function AttachmentsPanel({ issue, attachments }: { issue: IssueTarget; a
 }
 
 function NoteItem({ note, issue, canRevise }: { note: NoteView; issue: IssueTarget; canRevise: boolean }) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(note.title);
+  const [category, setCategory] = useState(note.category);
+  const [draft, setDraft] = useState(note.content);
+  const [history, setHistory] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  if (!editing && (title !== note.title || category !== note.category || draft !== note.content)) {
+    setTitle(note.title);
+    setCategory(note.category);
+    setDraft(note.content);
+  }
+
   return (
-    <EditableEntry
-      issue={issue}
-      author={note.author}
-      createdAt={note.createdAt}
-      updatedAt={note.updatedAt}
-      text={note.content}
-      canRevise={canRevise}
-      label="note"
-      recordId={note.id}
-      onSave={(content) => updateNoteAction(null, targetForm(issue, { noteId: note.id, content }))}
-      onRemove={() => removeNoteAction(null, targetForm(issue, { noteId: note.id }))}
-    />
+    <li className="border-b border-line py-3">
+      <div className="flex items-center gap-2">
+        <Avatar name={note.author.name} size="sm" />
+        <p className="min-w-0 text-sm">
+          <span className="font-semibold">{note.author.name}</span>
+          <span className="text-muted"> · {formatDateTime(note.createdAt)}</span>
+          <span className="text-muted"> · {NOTE_CATEGORY_LABELS[note.category]}</span>
+        </p>
+      </div>
+      {editing ? (
+        <div className="mt-2 grid gap-2">
+          <label className="grid gap-1 text-[13px] font-medium">
+            Title
+            <input className="h-9 rounded-md border border-line bg-surface px-2 text-sm" value={title} onChange={(event) => setTitle(event.target.value)} />
+          </label>
+          <label className="grid gap-1 text-[13px] font-medium">
+            Category
+            <select className="h-9 rounded-md border border-line bg-surface px-2 text-sm" value={category} onChange={(event) => setCategory(event.target.value as NoteView["category"])}>
+              {NOTE_CATEGORIES.map((value) => (
+                <option key={value} value={value}>
+                  {NOTE_CATEGORY_LABELS[value]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <TextArea value={draft} onChange={(event) => setDraft(event.target.value)} rows={4} aria-label="Note" />
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              disabled={pending || title.trim().length === 0 || draft.trim().length === 0}
+              onClick={() => {
+                setPending(true);
+                setError(null);
+                void updateNoteAction(null, targetForm(issue, { noteId: note.id, title, category, content: draft })).then((result) => {
+                  setPending(false);
+                  if (!result?.ok) {
+                    setError(result?.error?.message ?? "Could not save the note.");
+                    return;
+                  }
+                  setEditing(false);
+                  router.refresh();
+                });
+              }}
+            >
+              {pending ? "Saving…" : "Save"}
+            </Button>
+            <Button type="button" variant="quiet" onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <p className="mt-2 text-sm font-semibold">{note.title}</p>
+          <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">{note.content}</p>
+        </>
+      )}
+      {error ? <p role="alert" className="mt-2 text-[13px] font-medium text-danger">{error}</p> : null}
+      {canRevise && !editing ? (
+        <div className="mt-2 flex gap-3">
+          <button type="button" className="text-[13px] font-semibold text-muted" onClick={() => setEditing(true)}>
+            Edit
+          </button>
+          {confirming ? (
+            <>
+              <span className="text-[13px] text-muted">Remove this note?</span>
+              <button
+                type="button"
+                className="text-[13px] font-semibold text-danger disabled:opacity-60"
+                disabled={pending}
+                onClick={() => {
+                  setPending(true);
+                  setError(null);
+                  void removeNoteAction(null, targetForm(issue, { noteId: note.id })).then((result) => {
+                    setPending(false);
+                    if (!result?.ok) {
+                      setError(result?.error?.message ?? "Could not remove the note.");
+                      return;
+                    }
+                    setConfirming(false);
+                    router.refresh();
+                  });
+                }}
+              >
+                {pending ? "Removing…" : "Remove"}
+              </button>
+              <button
+                type="button"
+                className="text-[13px] font-semibold text-muted disabled:opacity-60"
+                disabled={pending}
+                onClick={() => {
+                  setConfirming(false);
+                  setError(null);
+                }}
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button type="button" className="text-[13px] font-semibold text-muted" onClick={() => setConfirming(true)}>
+              Remove
+            </button>
+          )}
+        </div>
+      ) : null}
+      {note.revisions.length > 1 ? (
+        <div className="mt-2">
+          <button type="button" className="text-[13px] font-semibold text-muted" onClick={() => setHistory((current) => !current)}>
+            {history ? "Hide history" : `${note.revisions.length} revisions`}
+          </button>
+          {history ? (
+            <ol className="mt-2 grid gap-2">
+              {note.revisions.map((revision) => (
+                <li key={revision.revision} className="rounded-md border border-line px-3 py-2 text-sm">
+                  <p className="text-xs text-muted">
+                    Revision {revision.revision} · {NOTE_CATEGORY_LABELS[revision.category]} · {revision.editorName} · {formatDateTime(revision.createdAt)}
+                  </p>
+                  <p className="mt-1 font-medium">{revision.title}</p>
+                  <p className="mt-1 whitespace-pre-wrap text-muted">{revision.content}</p>
+                </li>
+              ))}
+            </ol>
+          ) : null}
+        </div>
+      ) : null}
+    </li>
   );
 }
 
@@ -218,6 +348,13 @@ function CommentItem({
   issue: IssueTarget;
   canRevise: boolean;
 }) {
+  if (comment.deleted || comment.body === null) {
+    return (
+      <li className="border-b border-line py-3 text-sm text-muted">
+        A comment from {comment.author.name} was removed · {formatDateTime(comment.createdAt)}
+      </li>
+    );
+  }
   return (
     <EditableEntry
       issue={issue}
@@ -367,19 +504,22 @@ function EditableEntry({
 function Composer({ issue, kind }: { issue: IssueTarget; kind: "note" | "comment" }) {
   const router = useRouter();
   const [draft, setDraft] = useState("");
+  const [title, setTitle] = useState("");
+  const [category, setCategory] = useState<(typeof NOTE_CATEGORIES)[number]>("PRODUCT");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const label = kind === "note" ? "Internal note" : "Comment";
+  const noteReady = title.trim().length > 0 && draft.trim().length > 0;
 
   return (
     <form
       className="grid gap-2"
       onSubmit={(event) => {
         event.preventDefault();
-        if (!draft.trim()) return;
+        if (kind === "note" ? !noteReady : !draft.trim()) return;
         setPending(true);
         setError(null);
-        const form = targetForm(issue, kind === "note" ? { content: draft } : { body: draft });
+        const form = targetForm(issue, kind === "note" ? { title, category, content: draft } : { body: draft });
         const action = kind === "note" ? addNoteAction : addCommentAction;
         void action(null, form).then((result) => {
           setPending(false);
@@ -388,6 +528,7 @@ function Composer({ issue, kind }: { issue: IssueTarget; kind: "note" | "comment
             return;
           }
           setDraft("");
+          setTitle("");
           router.refresh();
         });
       }}
@@ -395,6 +536,29 @@ function Composer({ issue, kind }: { issue: IssueTarget; kind: "note" | "comment
       <label htmlFor={`new-${kind}`} className="text-[13px] font-medium">
         {label}
       </label>
+      {kind === "note" ? (
+        <div className="grid gap-2 sm:grid-cols-[1fr_10rem]">
+          <input
+            aria-label="Note title"
+            value={title}
+            placeholder="Title"
+            className="h-9 rounded-md border border-line bg-surface px-2 text-sm"
+            onChange={(event) => setTitle(event.target.value)}
+          />
+          <select
+            aria-label="Note category"
+            value={category}
+            className="h-9 rounded-md border border-line bg-surface px-2 text-sm"
+            onChange={(event) => setCategory(event.target.value as (typeof NOTE_CATEGORIES)[number])}
+          >
+            {NOTE_CATEGORIES.map((value) => (
+              <option key={value} value={value}>
+                {NOTE_CATEGORY_LABELS[value]}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
       <TextArea
         id={`new-${kind}`}
         value={draft}
@@ -408,7 +572,7 @@ function Composer({ issue, kind }: { issue: IssueTarget; kind: "note" | "comment
         </p>
       ) : null}
       <div>
-        <Button type="submit" variant="secondary" disabled={pending || draft.trim().length === 0}>
+        <Button type="submit" variant="secondary" disabled={pending || (kind === "note" ? !noteReady : draft.trim().length === 0)}>
           {pending ? "Saving…" : kind === "note" ? "Add note" : "Add comment"}
         </Button>
       </div>

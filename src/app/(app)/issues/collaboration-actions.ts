@@ -28,7 +28,12 @@ function text(value: FormDataEntryValue | null): string {
 export async function addNoteAction(_previous: CollaborationActionState, formData: FormData): Promise<CollaborationActionState> {
   try {
     const ctx = await getActionAuthContext();
-    const created = await addNote(ctx, { issueId: formData.get("issueId"), content: formData.get("content") });
+    const created = await addNote(ctx, {
+      issueId: formData.get("issueId"),
+      title: formData.get("title"),
+      category: formData.get("category"),
+      content: formData.get("content"),
+    });
     revalidateIssue(text(formData.get("projectKey")), text(formData.get("issueNumber")));
     return actionSuccess({ id: created.id });
   } catch (error) {
@@ -39,7 +44,12 @@ export async function addNoteAction(_previous: CollaborationActionState, formDat
 export async function updateNoteAction(_previous: CollaborationActionState, formData: FormData): Promise<CollaborationActionState> {
   try {
     const ctx = await getActionAuthContext();
-    const result = await updateNote(ctx, { noteId: formData.get("noteId"), content: formData.get("content") });
+    const result = await updateNote(ctx, {
+      noteId: formData.get("noteId"),
+      title: formData.get("title"),
+      category: formData.get("category"),
+      content: formData.get("content"),
+    });
     revalidateIssue(text(formData.get("projectKey")), text(formData.get("issueNumber")));
     return actionSuccess({ changed: result.changed });
   } catch (error) {

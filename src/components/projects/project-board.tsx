@@ -1,6 +1,7 @@
 "use client";
 
 import { startTransition, useOptimistic, useState, type DragEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { patchIssueAction } from "@/app/(app)/issues/actions";
 import { Avatar } from "@/components/ui/avatar";
@@ -121,6 +122,7 @@ export function ProjectBoard({
                     {column.map((card) => (
                       <li key={card.id}>
                         <BoardCardView
+                          projectKey={projectKey}
                           card={card}
                           canMutate={canMutate}
                           pending={pendingId === card.id}
@@ -141,12 +143,14 @@ export function ProjectBoard({
 }
 
 function BoardCardView({
+  projectKey,
   card,
   canMutate,
   pending,
   celebrate,
   onMove,
 }: {
+  projectKey: string;
   card: BoardCard;
   canMutate: boolean;
   pending: boolean;
@@ -172,9 +176,15 @@ function BoardCardView({
       {context ? <p className="truncate text-[11px] font-medium text-muted">{context}</p> : null}
       <div className="flex items-center justify-between gap-2">
         <IssueTypeBadge type={card.type} short />
-        <p className="font-mono text-[11px] text-muted">{card.key}</p>
+        <Link href={`/projects/${projectKey}/issues/${card.number}`} className="font-mono text-[11px] text-muted hover:underline">
+          {card.key}
+        </Link>
       </div>
-      <h3 className="text-sm font-medium leading-snug">{card.title}</h3>
+      <h3 className="text-sm font-medium leading-snug">
+        <Link href={`/projects/${projectKey}/issues/${card.number}`} className="hover:underline">
+          {card.title}
+        </Link>
+      </h3>
       {card.parentTitle ? <p className="truncate text-xs text-muted">In {card.parentTitle}</p> : null}
       <div className="flex flex-wrap items-center gap-1.5 text-xs">
         <IssuePriorityBadge priority={card.priority} />

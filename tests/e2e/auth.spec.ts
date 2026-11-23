@@ -17,7 +17,26 @@ test("unknown credentials are rejected", async ({ page }) => {
   await page.goto("/login");
   await page.getByLabel("Work email").fill("nobody@workhub.test");
   await page.getByLabel("Password").fill("definitely-wrong-pass");
-  await page.getByRole("button", { name: "Sign in" }).click();
+
+  const submit = async () => {
+    const [response] = await Promise.all([
+      page.waitForResponse(
+        (response) => new URL(response.url()).pathname === "/api/auth/sign-in/email" && response.request().method() === "POST",
+      ),
+      page.getByRole("button", { name: "Sign in" }).click(),
+    ]);
+    return response;
+  };
+
+  let response = await submit();
+  if (response.status() === 429) {
+    const retryAfter = Number(response.headers()["x-retry-after"]);
+    expect(retryAfter).toBeGreaterThan(0);
+    expect(retryAfter).toBeLessThanOrEqual(10);
+    await page.waitForTimeout(retryAfter * 1000 + 100);
+    response = await submit();
+  }
+  expect(response.status()).not.toBe(429);
   await expect(page.getByText(/couldn.t sign you in/i)).toBeVisible();
   await expect(page).toHaveURL(/\/login/);
 });

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { CreateProjectForm } from "@/app/(app)/admin/create-project-form";
+import { ArchiveProjectButton, PurgeFileButton, RestoreProjectButton } from "@/app/(app)/admin/project-record-actions";
+import { listRemovedAttachments } from "@/modules/collaboration/collaboration.service";
 import { Badge, ProjectStatusBadge } from "@/components/ui/badge";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -12,11 +14,14 @@ export const metadata: Metadata = { title: "Administration" };
 
 export default async function AdminPage() {
   const ctx = await requireWorkspacePermission("admin.access");
-  const [users, projects, leads] = await Promise.all([
+  const [users, projects, leads, removedFiles] = await Promise.all([
     listUsersForAdmin(ctx),
     listProjectsForAdmin(ctx),
     listLeadCandidates(ctx),
+    listRemovedAttachments(ctx),
   ]);
+  const activeProjects = projects.filter((project) => !project.archivedAt);
+  const archivedProjects = projects.filter((project) => project.archivedAt);
 
   return (
     <>
@@ -89,8 +94,8 @@ export default async function AdminPage() {
         </Card>
 
         <Card>
-          <CardHeader title="Projects" description="Metadata only. Open a project you belong to in order to see its content." />
-          {projects.length === 0 ? (
+          <CardHeader title="Projects" description="Metadata only. Archiving hides a project from navigation and reports. It does not delete issues." />
+          {activeProjects.length === 0 ? (
             <EmptyState title="No projects yet" />
           ) : (
             <div className="overflow-x-auto">
@@ -112,10 +117,13 @@ export default async function AdminPage() {
                     <th scope="col" className="px-5 py-2.5 font-semibold">
                       Members
                     </th>
+                    <th scope="col" className="px-5 py-2.5 font-semibold">
+                      <span className="sr-only">Actions</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {projects.map((project) => (
+                  {activeProjects.map((project) => (
                     <tr key={project.id} className="border-b border-line/70 last:border-0">
                       <td className="px-5 py-3 font-mono text-[13px]">{project.key}</td>
                       <td className="px-3 py-3">{project.name}</td>
@@ -124,11 +132,56 @@ export default async function AdminPage() {
                       </td>
                       <td className="px-3 py-3">{project.lead?.name ?? "—"}</td>
                       <td className="px-5 py-3 tabular-nums">{project.memberCount}</td>
+                      <td className="px-5 py-3">
+                        <ArchiveProjectButton projectId={project.id} />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader title="Archived projects" description="These stay out of reports and project navigation until you restore them." />
+          {archivedProjects.length === 0 ? (
+            <EmptyState title="No archived projects" />
+          ) : (
+            <ul className="divide-y divide-line">
+              {archivedProjects.map((project) => (
+                <li key={project.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-sm">
+                  <span>
+                    <span className="font-mono text-[13px]">{project.key}</span> {project.name}
+                  </span>
+                  <RestoreProjectButton projectId={project.id} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="Removed files"
+            description="Members keep the file bytes when they remove an attachment. Purging deletes those bytes and leaves the audit event."
+          />
+          {removedFiles.length === 0 ? (
+            <EmptyState title="No files waiting to be purged" />
+          ) : (
+            <ul className="divide-y divide-line">
+              {removedFiles.map((file) => (
+                <li key={file.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-sm">
+                  <span>
+                    {file.filename}
+                    <span className="block text-[13px] text-muted">
+                      {file.projectKey}-{file.issueNumber}
+                    </span>
+                  </span>
+                  <PurgeFileButton attachmentId={file.id} />
+                </li>
+              ))}
+            </ul>
           )}
         </Card>
 

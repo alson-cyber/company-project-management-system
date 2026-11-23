@@ -11,6 +11,8 @@ describe("parseEnv", () => {
   test("applies the 25 MB attachment default", () => {
     const env = parseEnv(base);
     expect(env.ATTACHMENT_MAX_BYTES).toBe(25 * 1024 * 1024);
+    expect(env.ATTACHMENT_DANGEROUS_EXTENSIONS).toContain("exe");
+    expect(env.ATTACHMENT_DANGEROUS_MIME_TYPES).toContain("application/x-msdownload");
     expect(env.STORAGE_DRIVER).toBe("local");
   });
 

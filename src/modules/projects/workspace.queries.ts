@@ -55,9 +55,38 @@ export async function listProjectWorkspaceIssues(ctx: AuthContext, projectId: st
   }));
   const timeZone = getEnv().COMPANY_TIMEZONE;
 
-  return rows.map((row) => ({
+  return rows.map((row) =>
+    mapWorkspaceIssue(project.key, row, progressOfIssue(row.id, progressRows), timeZone),
+  );
+}
+
+/** Archived issues kept so a recorded completion still names the work. They are not current assignments. */
+export async function listCompletionHistoryIssues(ctx: AuthContext, projectId: string): Promise<WorkspaceIssue[]> {
+  assertProjectPermission(ctx, "project.view", projectId);
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, ...visibleProjectsWhere(ctx) },
+    select: { id: true, key: true },
+  });
+  if (!project) return [];
+  const rows = await prisma.issue.findMany({
+    where: { projectId: project.id, archivedAt: { not: null } },
+    select: issueSelect,
+    orderBy: { number: "asc" },
+  });
+  const timeZone = getEnv().COMPANY_TIMEZONE;
+  return rows.map((row) => mapWorkspaceIssue(project.key, row, { done: 0, total: 0, percent: 0 }, timeZone, false));
+}
+
+function mapWorkspaceIssue(
+  projectKey: string,
+  row: Prisma.IssueGetPayload<{ select: typeof issueSelect }>,
+  progress: WorkspaceIssue["progress"],
+  timeZone: string,
+  countOverdue = true,
+): WorkspaceIssue {
+  return {
     id: row.id,
-    key: issueKey(project.key, row.number),
+    key: issueKey(projectKey, row.number),
     number: row.number,
     type: row.type,
     title: row.title,
@@ -68,13 +97,13 @@ export async function listProjectWorkspaceIssues(ctx: AuthContext, projectId: st
     assigneeName: row.assignee?.name ?? null,
     dueDate: row.dueDate ? calendarDayUtc(row.dueDate) : null,
     plannedStartDate: row.plannedStartDate ? calendarDayUtc(row.plannedStartDate) : null,
-    overdue: isOverdue(row.dueDate, row.status, timeZone),
+    overdue: countOverdue && isOverdue(row.dueDate, row.status, timeZone),
     completedAt: row.completedAt ? row.completedAt.toISOString() : null,
     completedById: row.completedById,
     createdById: row.createdById,
     labels: row.labels.map((entry) => entry.label.name),
-    progress: progressOfIssue(row.id, progressRows),
-  }));
+    progress,
+  };
 }
 
 export interface ProjectFileRow {

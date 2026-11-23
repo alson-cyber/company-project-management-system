@@ -51,6 +51,7 @@ const issueWriteSelect = {
   completedAt: true,
   completedById: true,
   archivedAt: true,
+  updatedAt: true,
 } satisfies Prisma.IssueSelect;
 
 type IssueRow = Prisma.IssueGetPayload<{ select: typeof issueWriteSelect }>;
@@ -72,6 +73,23 @@ function fieldSnapshot(issue: IssueRow): JsonObject {
     dueDate: issue.dueDate ? calendarDayUtc(issue.dueDate) : null,
     plannedStartDate: issue.plannedStartDate ? calendarDayUtc(issue.plannedStartDate) : null,
   };
+}
+
+function previewSnapshot(issue: IssueRow, data: Prisma.IssueUncheckedUpdateInput): JsonObject {
+  const next = fieldSnapshot(issue);
+  if (typeof data.title === "string") next.title = data.title;
+  if (typeof data.description === "string" || data.description === null) next.description = data.description;
+  if (typeof data.status === "string") next.status = data.status;
+  if (typeof data.priority === "string") next.priority = data.priority;
+  if (typeof data.parentId === "string" || data.parentId === null) next.parentId = data.parentId;
+  if (typeof data.assigneeId === "string" || data.assigneeId === null) next.assigneeId = data.assigneeId;
+  if (typeof data.reporterId === "string") next.reporterId = data.reporterId;
+  if (typeof data.type === "string") next.type = data.type;
+  if (data.dueDate instanceof Date) next.dueDate = calendarDayUtc(data.dueDate);
+  else if (data.dueDate === null) next.dueDate = null;
+  if (data.plannedStartDate instanceof Date) next.plannedStartDate = calendarDayUtc(data.plannedStartDate);
+  else if (data.plannedStartDate === null) next.plannedStartDate = null;
+  return next;
 }
 
 function diffFields(before: JsonObject, after: JsonObject): { before: JsonObject; after: JsonObject } | null {
@@ -421,7 +439,18 @@ export async function updateIssue(ctx: AuthContext, rawInput: unknown): Promise<
     }
 
     const before = fieldSnapshot(issue);
-    const updated = await tx.issue.update({ where: { id: issue.id }, data, select: issueWriteSelect });
+    if (!diffFields(before, previewSnapshot(issue, data))) {
+      return { changed: false, key: issueKey(issue.project.key, issue.number) };
+    }
+
+    const claimed = await tx.issue.updateMany({
+      where: { id: issue.id, status: issue.status, updatedAt: issue.updatedAt },
+      data,
+    });
+    if (claimed.count !== 1) {
+      throw new ConflictError("This issue was updated by someone else. Refresh and try again.");
+    }
+    const updated = await tx.issue.findFirstOrThrow({ where: { id: issue.id }, select: issueWriteSelect });
     const after = fieldSnapshot(updated);
     const changed = diffFields(before, after);
     if (!changed) return { changed: false, key: issueKey(issue.project.key, issue.number) };
