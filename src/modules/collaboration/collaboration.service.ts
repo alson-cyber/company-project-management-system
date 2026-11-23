@@ -1,5 +1,5 @@
 import "server-only";
-import type { Prisma } from "@/generated/prisma/client";
+import { Prisma, type Prisma as PrismaTypes } from "@/generated/prisma/client";
 import { recordActivity } from "@/modules/activity/activity.service";
 import { notifyDiscussion } from "@/modules/attention/notify";
 import type { AuthContext } from "@/server/access/types";
@@ -7,6 +7,7 @@ import { assertProjectPermission, assertWorkspacePermission, hasProjectPermissio
 import { getAttachmentPolicy, isWithinAttachmentLimit } from "@/server/config";
 import { prisma } from "@/server/db";
 import { ForbiddenError, NotFoundError, ValidationError, parseInput } from "@/server/errors";
+import { runAttachmentPurge, type PurgeLedger } from "@/modules/collaboration/purge";
 import { getObjectStorage } from "@/server/storage";
 import { issueKey } from "@/modules/issues/issue.keys";
 import {
@@ -29,7 +30,7 @@ import {
   storedContentType,
 } from "@/modules/collaboration/files";
 
-type Tx = Prisma.TransactionClient;
+type Tx = PrismaTypes.TransactionClient;
 
 interface IssueRef {
   id: string;
@@ -503,37 +504,59 @@ export async function listRemovedAttachments(ctx: AuthContext): Promise<RemovedA
   );
 }
 
-/** Deletes retained bytes after a member has already removed the file. Admin only, and audited. */
-export async function purgeAttachment(ctx: AuthContext, rawInput: unknown): Promise<{ purged: boolean }> {
+function purgeLedger(ctx: AuthContext): PurgeLedger {
+  return {
+    async request(attachmentId) {
+      return prisma.$transaction(async (tx) => {
+        const locked = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+          SELECT id FROM issue_attachments WHERE id = ${attachmentId} FOR UPDATE
+        `);
+        if (locked.length !== 1) throw new NotFoundError("Attachment not found.");
+        const attachment = await tx.issueAttachment.findFirst({
+          where: { id: attachmentId, issue: { project: { workspaceId: ctx.workspace.id } } },
+          select: {
+            id: true,
+            objectKey: true,
+            originalFilename: true,
+            deletedAt: true,
+            purgeRequestedAt: true,
+            purgedAt: true,
+            issue: { select: { id: true, projectId: true, number: true, archivedAt: true, project: { select: { key: true } } } },
+          },
+        });
+        if (!attachment) throw new NotFoundError("Attachment not found.");
+        if (!attachment.deletedAt) throw new ValidationError("Remove the file from the issue before purging it.");
+        if (attachment.purgedAt) return { state: "done" as const };
+        if (!attachment.purgeRequestedAt) {
+          await tx.issueAttachment.update({ where: { id: attachment.id }, data: { purgeRequestedAt: new Date() } });
+          await writeCollaborationActivity(tx, ctx, {
+            action: "issue.attachment_purged",
+            entityType: "issue_attachment",
+            entityId: attachment.id,
+            issue: attachment.issue,
+            before: { filename: attachment.originalFilename },
+          });
+        }
+        return { state: "pending" as const, objectKey: attachment.objectKey };
+      });
+    },
+    async markCleaned(attachmentId) {
+      await prisma.issueAttachment.updateMany({
+        where: { id: attachmentId, purgedAt: null, issue: { project: { workspaceId: ctx.workspace.id } } },
+        data: { purgedAt: new Date() },
+      });
+    },
+  };
+}
+
+/** Deletes retained bytes after a member has already removed the file. Admin only, and audited before deletion. */
+export async function purgeAttachment(
+  ctx: AuthContext,
+  rawInput: unknown,
+  storage?: { delete(key: string): Promise<void> },
+): Promise<{ purged: boolean }> {
   assertWorkspacePermission(ctx, "admin.access");
   const input = parseInput(attachmentIdSchema, rawInput);
-  const attachment = await prisma.issueAttachment.findFirst({
-    where: { id: input.attachmentId, issue: { project: { workspaceId: ctx.workspace.id } } },
-    select: {
-      id: true,
-      objectKey: true,
-      originalFilename: true,
-      deletedAt: true,
-      purgedAt: true,
-      issueId: true,
-      issue: { select: { id: true, projectId: true, number: true, archivedAt: true, project: { select: { key: true } } } },
-    },
-  });
-  if (!attachment) throw new NotFoundError("Attachment not found.");
-  if (!attachment.deletedAt) throw new ValidationError("Remove the file from the issue before purging it.");
-  if (attachment.purgedAt) return { purged: false };
-
-  const storage = await getObjectStorage();
-  await storage.delete(attachment.objectKey);
-  await prisma.$transaction(async (tx) => {
-    await tx.issueAttachment.update({ where: { id: attachment.id }, data: { purgedAt: new Date() } });
-    await writeCollaborationActivity(tx, ctx, {
-      action: "issue.attachment_purged",
-      entityType: "issue_attachment",
-      entityId: attachment.id,
-      issue: attachment.issue,
-      before: { filename: attachment.originalFilename },
-    });
-  });
-  return { purged: true };
+  const objects = storage ?? (await getObjectStorage());
+  return runAttachmentPurge(purgeLedger(ctx), objects, input.attachmentId);
 }

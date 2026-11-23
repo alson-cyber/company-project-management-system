@@ -1,8 +1,10 @@
 import { beforeAll, describe, expect, test } from "vitest";
 import { addAttachment, addComment, addNote, purgeAttachment, removeAttachment, removeComment, updateNote } from "@/modules/collaboration/collaboration.service";
 import { listIssueCollaboration } from "@/modules/collaboration/collaboration.queries";
-import { changeStatus, createIssue, updateIssue } from "@/modules/issues/issue.service";
+import { archiveIssue, changeStatus, createIssue, restoreIssue, updateIssue } from "@/modules/issues/issue.service";
 import { addProjectMember, archiveProject, removeProjectMember, restoreProject, transferProjectLead } from "@/modules/projects/project.service";
+import { memberFacts } from "@/modules/projects/workspace.model";
+import { listCompletionHistoryIssues, listProjectWorkspaceIssues } from "@/modules/projects/workspace.queries";
 import { ConflictError, ForbiddenError, ValidationError } from "@/server/errors";
 import { getObjectStorage } from "@/server/storage";
 import { authContextFor, emails, resetDevelopmentSeed, testDb } from "./helpers";
@@ -95,6 +97,35 @@ describe("audit fixes", () => {
     const purged = await testDb.issueAttachment.findUniqueOrThrow({ where: { id: saved.id } });
     expect(purged.purgedAt).not.toBeNull();
     expect(await testDb.activityEvent.count({ where: { entityId: saved.id, action: "issue.attachment_purged" } })).toBe(1);
+    await purgeAttachment(admin, { attachmentId: saved.id });
+    expect(await testDb.activityEvent.count({ where: { entityId: saved.id, action: "issue.attachment_purged" } })).toBe(1);
+  });
+
+  test("a storage failure during purge keeps the bytes and the audit for a later retry", async () => {
+    const alex = await authContextFor(emails.member);
+    const admin = await authContextFor(emails.admin);
+    const project = await testDb.project.findFirstOrThrow({ where: { key: "AQUA" }, select: { id: true } });
+    const issue = await createIssue(alex, { projectId: project.id, type: "EPIC", title: "Retry purge epic" });
+    const saved = await addAttachment(alex, {
+      issueId: issue.id,
+      filename: "retry-me.txt",
+      contentType: "text/plain",
+      bytes: Uint8Array.from([114, 101, 116, 114, 121]),
+    });
+    await removeAttachment(alex, { attachmentId: saved.id });
+    const storage = await getObjectStorage();
+    const row = await testDb.issueAttachment.findUniqueOrThrow({ where: { id: saved.id } });
+    await expect(
+      purgeAttachment(admin, { attachmentId: saved.id }, { delete: async () => { throw new Error("storage unavailable"); } }),
+    ).rejects.toThrow(/storage unavailable/);
+    const pending = await testDb.issueAttachment.findUniqueOrThrow({ where: { id: saved.id } });
+    expect(pending.purgeRequestedAt).not.toBeNull();
+    expect(pending.purgedAt).toBeNull();
+    expect(await storage.head(row.objectKey)).not.toBeNull();
+    expect(await testDb.activityEvent.count({ where: { entityId: saved.id, action: "issue.attachment_purged" } })).toBe(1);
+    await purgeAttachment(admin, { attachmentId: saved.id });
+    expect(await storage.head(row.objectKey)).toBeNull();
+    expect(await testDb.activityEvent.count({ where: { entityId: saved.id, action: "issue.attachment_purged" } })).toBe(1);
   });
 
   test("a note keeps every revision, and a removed comment stays as a placeholder", async () => {
@@ -165,5 +196,58 @@ describe("audit fixes", () => {
     const restored = await testDb.project.findUniqueOrThrow({ where: { id: project.id } });
     expect(restored.archivedAt).toBeNull();
     await expect(archiveProject(alex, { projectId: project.id })).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  test("removing a member while the lead role moves still leaves one lead", async () => {
+    const omar = await authContextFor(emails.admin);
+    const alex = await authContextFor(emails.member);
+    const project = await testDb.project.create({
+      data: {
+        workspaceId: omar.workspace.id,
+        key: `Z${crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+        name: "Membership race",
+        color: "#2563eb",
+        createdById: omar.userId,
+        members: { create: { userId: (await authContextFor(emails.lead)).userId, role: "LEAD", addedById: omar.userId } },
+      },
+      select: { id: true },
+    });
+    const lead = await authContextFor(emails.lead);
+    await addProjectMember(lead, { projectId: project.id, userId: alex.userId });
+    await Promise.allSettled([
+      removeProjectMember(lead, { projectId: project.id, userId: alex.userId }),
+      transferProjectLead(lead, { projectId: project.id, userId: alex.userId }),
+    ]);
+    expect(await testDb.projectMember.count({ where: { projectId: project.id, role: "LEAD" } })).toBe(1);
+  });
+
+  test("completion credit remains after archive and current work returns on restore", async () => {
+    const alex = await authContextFor(emails.member);
+    const project = await testDb.project.findFirstOrThrow({ where: { key: "AQUA" }, select: { id: true } });
+    const issue = await createIssue(alex, {
+      projectId: project.id,
+      type: "EPIC",
+      title: "Credit survives archive",
+      assigneeId: alex.userId,
+      dueDate: "2020-01-01",
+    });
+    await changeStatus(alex, issue.id, "DONE");
+    await changeStatus(alex, issue.id, "IN_PROGRESS");
+    await archiveIssue(alex, { issueId: issue.id });
+    const credits = [{ actorUserId: alex.userId, issueId: issue.id }];
+    const whileArchived = memberFacts(
+      alex.userId,
+      await listProjectWorkspaceIssues(alex, project.id),
+      credits,
+      await listCompletionHistoryIssues(alex, project.id),
+    );
+    expect(whileArchived.completed.map((item) => item.id)).toContain(issue.id);
+    expect(whileArchived.openAssigned.map((item) => item.id)).not.toContain(issue.id);
+    expect(whileArchived.overdueAssigned.map((item) => item.id)).not.toContain(issue.id);
+    await restoreIssue(alex, { issueId: issue.id });
+    const restored = memberFacts(alex.userId, await listProjectWorkspaceIssues(alex, project.id), credits, []);
+    expect(restored.completed.map((item) => item.id)).toContain(issue.id);
+    expect(restored.openAssigned.map((item) => item.id)).toContain(issue.id);
+    expect(restored.overdueAssigned.map((item) => item.id)).toContain(issue.id);
   });
 });

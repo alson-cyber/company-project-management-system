@@ -416,9 +416,12 @@ export function memberFacts(
   userId: string,
   issues: readonly WorkspaceIssue[],
   completions: readonly CompletionCredit[] = [],
+  history: readonly WorkspaceIssue[] = [],
 ): MemberFacts {
   const assignedOpen = issues.filter((issue) => issue.assigneeId === userId && issue.status !== "DONE");
-  const byId = new Map(issues.map((issue) => [issue.id, issue]));
+  const byId = new Map<string, WorkspaceIssue>();
+  for (const issue of history) byId.set(issue.id, issue);
+  for (const issue of issues) byId.set(issue.id, issue);
   const seen = new Set<string>();
   const completed: AttentionItem[] = [];
   for (const credit of completions) {

@@ -9,7 +9,7 @@ import { activityDetail, describeActivity } from "@/modules/activity/activity.fo
 import { listFilteredProjectActivity, listProjectCompletionCredits } from "@/modules/activity/activity.queries";
 import { getVisibleProjectByKey } from "@/modules/projects/project.queries";
 import { memberFacts, type AttentionItem } from "@/modules/projects/workspace.model";
-import { listMemberWriting, listProjectWorkspaceIssues } from "@/modules/projects/workspace.queries";
+import { listCompletionHistoryIssues, listMemberWriting, listProjectWorkspaceIssues } from "@/modules/projects/workspace.queries";
 import { requireAuthContext } from "@/server/access/session";
 import { visibleProject } from "../../guard";
 
@@ -26,13 +26,14 @@ export default async function TeamMemberPage({ params }: { params: Promise<{ pro
   const member = project.members.find((person) => person.userId === userId);
   if (!member) notFound();
 
-  const [issues, activity, writing, completions] = await Promise.all([
+  const [issues, history, activity, writing, completions] = await Promise.all([
     listProjectWorkspaceIssues(ctx, project.id),
+    listCompletionHistoryIssues(ctx, project.id),
     listFilteredProjectActivity(ctx, project.id, { actorId: userId }, 20),
     listMemberWriting(ctx, project.id, project.key, userId),
     listProjectCompletionCredits(ctx, project.id),
   ]);
-  const facts = memberFacts(userId, issues, completions);
+  const facts = memberFacts(userId, issues, completions, history);
 
   return (
     <>

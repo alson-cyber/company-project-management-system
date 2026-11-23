@@ -59,7 +59,7 @@ Search queries are truncated to 80 characters. Result lists are fixed small page
 - The stored MIME type comes from the file bytes. When detection is inconclusive the record is `application/octet-stream`; the client's declared type is never stored. `ATTACHMENT_DANGEROUS_EXTENSIONS` and `ATTACHMENT_DANGEROUS_MIME_TYPES` replace the default denylists. A declared dangerous type is refused even when the filename looks harmless, and detected executable bytes are refused even when the filename is harmless.
 - Download responses send `X-Content-Type-Options: nosniff`. `Content-Disposition: inline` is used only for JPEG, PNG, GIF, and WebP. Everything else is an attachment download.
 - Opening or removing an attachment checks project permission. A soft-deleted row is not returned, and the stored bytes stay until an Admin purges them.
-- Removing a file records the removal and keeps the object. Purging is a separate Admin action that deletes the bytes and writes `issue.attachment_purged`. Users cannot choose the storage key. Executable types are rejected, and each new upload stores a SHA-256 checksum.
+- Removing a file records the removal and keeps the object. Purging is a separate Admin action. It first commits `purge_requested_at` and `issue.attachment_purged`, then deletes the bytes, then sets `purged_at`. A failed delete or a failed final write can be retried without a second audit. Users cannot choose the storage key. Executable types are rejected, and each new upload stores a SHA-256 checksum.
 - Local storage resolves keys under the storage root and rejects `..`.
 - There is no antivirus scan. A production deployment should scan objects in the storage pipeline before they are served.
 

@@ -168,5 +168,19 @@ describe("member facts", () => {
     expect(memberFacts("mika", reopened, credits).completed.map((item) => item.key)).toEqual(["AQUA-3"]);
     expect(memberFacts("alex", tree).openAssigned.map((item) => item.key).sort()).toEqual(["AQUA-6", "AQUA-8"]);
     expect(memberFacts("alex", tree).overdueAssigned.map((item) => item.key)).toEqual(["AQUA-6"]);
+    const archived = issue({
+      id: "archived-done",
+      key: "AQUA-9",
+      number: 9,
+      type: "TASK",
+      title: "Archived completion",
+      status: "DONE",
+      assigneeId: "alex",
+      overdue: true,
+    });
+    const withHistory = memberFacts("mika", tree, [{ actorUserId: "mika", issueId: "archived-done" }], [archived]);
+    expect(withHistory.completed.map((item) => item.key)).toEqual(["AQUA-9"]);
+    expect(withHistory.openAssigned).toEqual([]);
+    expect(withHistory.overdueAssigned).toEqual([]);
   });
 });

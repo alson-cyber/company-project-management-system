@@ -11,7 +11,7 @@ import { listLatestContributions, listProjectCompletionCredits } from "@/modules
 import { getVisibleProjectByKey, listMembershipCandidates } from "@/modules/projects/project.queries";
 import { hasProjectPermission } from "@/server/access/policy";
 import { memberFacts } from "@/modules/projects/workspace.model";
-import { listProjectWorkspaceIssues } from "@/modules/projects/workspace.queries";
+import { listCompletionHistoryIssues, listProjectWorkspaceIssues } from "@/modules/projects/workspace.queries";
 import { requireAuthContext } from "@/server/access/session";
 import { visibleProject } from "../guard";
 
@@ -27,8 +27,9 @@ export default async function TeamPage({ params }: { params: Promise<{ projectKe
   if (!project) notFound();
 
   const canManage = hasProjectPermission(ctx, "project.manage", project.id);
-  const [issues, latest, completions, candidates] = await Promise.all([
+  const [issues, history, latest, completions, candidates] = await Promise.all([
     listProjectWorkspaceIssues(ctx, project.id),
+    listCompletionHistoryIssues(ctx, project.id),
     listLatestContributions(ctx, project.id),
     listProjectCompletionCredits(ctx, project.id),
     canManage ? listMembershipCandidates(ctx, project.id) : Promise.resolve([]),
@@ -63,7 +64,7 @@ export default async function TeamPage({ params }: { params: Promise<{ projectKe
           </thead>
           <tbody>
             {project.members.map((member) => {
-              const facts = memberFacts(member.userId, issues, completions);
+              const facts = memberFacts(member.userId, issues, completions, history);
               const contribution = latest.get(member.userId);
               return (
                 <tr key={member.userId} className="border-b border-line/70">

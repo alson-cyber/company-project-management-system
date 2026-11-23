@@ -200,6 +200,7 @@ function NoteItem({ note, issue, canRevise }: { note: NoteView; issue: IssueTarg
   const [category, setCategory] = useState(note.category);
   const [draft, setDraft] = useState(note.content);
   const [history, setHistory] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   if (!editing && (title !== note.title || category !== note.category || draft !== note.content)) {
@@ -272,9 +273,46 @@ function NoteItem({ note, issue, canRevise }: { note: NoteView; issue: IssueTarg
           <button type="button" className="text-[13px] font-semibold text-muted" onClick={() => setEditing(true)}>
             Edit
           </button>
-          <button type="button" className="text-[13px] font-semibold text-muted" onClick={() => removeNoteAction(null, targetForm(issue, { noteId: note.id })).then(() => router.refresh())}>
-            Remove
-          </button>
+          {confirming ? (
+            <>
+              <span className="text-[13px] text-muted">Remove this note?</span>
+              <button
+                type="button"
+                className="text-[13px] font-semibold text-danger disabled:opacity-60"
+                disabled={pending}
+                onClick={() => {
+                  setPending(true);
+                  setError(null);
+                  void removeNoteAction(null, targetForm(issue, { noteId: note.id })).then((result) => {
+                    setPending(false);
+                    if (!result?.ok) {
+                      setError(result?.error?.message ?? "Could not remove the note.");
+                      return;
+                    }
+                    setConfirming(false);
+                    router.refresh();
+                  });
+                }}
+              >
+                {pending ? "Removing…" : "Remove"}
+              </button>
+              <button
+                type="button"
+                className="text-[13px] font-semibold text-muted disabled:opacity-60"
+                disabled={pending}
+                onClick={() => {
+                  setConfirming(false);
+                  setError(null);
+                }}
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button type="button" className="text-[13px] font-semibold text-muted" onClick={() => setConfirming(true)}>
+              Remove
+            </button>
+          )}
         </div>
       ) : null}
       {note.revisions.length > 1 ? (

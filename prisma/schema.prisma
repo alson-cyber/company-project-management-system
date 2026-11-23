@@ -495,6 +495,8 @@ model IssueAttachment {
   checksumSha256   String?   @map("checksum_sha256")
   createdAt        DateTime  @default(now()) @map("created_at")
   deletedAt        DateTime? @map("deleted_at")
+  /** Set in the same transaction as the purge audit, before object storage is deleted. */
+  purgeRequestedAt DateTime? @map("purge_requested_at")
   purgedAt         DateTime? @map("purged_at")
 
   issue      Issue @relation(fields: [issueId], references: [id], onDelete: Restrict)

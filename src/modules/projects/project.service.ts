@@ -15,7 +15,7 @@ import {
 } from "@/modules/projects/project.schema";
 import { calendarDayUtc } from "@/lib/calendar";
 import { prisma } from "@/server/db";
-import { ConflictError, NotFoundError, ValidationError, parseInput } from "@/server/errors";
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError, parseInput } from "@/server/errors";
 import { assertProjectPermission, assertWorkspacePermission } from "@/server/access/policy";
 import type { AuthContext } from "@/server/access/types";
 
@@ -200,6 +200,22 @@ async function activeProject(ctx: AuthContext, projectId: string) {
   return project;
 }
 
+/** One lock for every membership change, so a transfer cannot pass a removal that already read the old role. */
+async function lockProject(tx: Prisma.TransactionClient, projectId: string): Promise<void> {
+  const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT id FROM projects WHERE id = ${projectId} FOR UPDATE
+  `);
+  if (rows.length !== 1) throw new NotFoundError("Project not found.");
+}
+
+async function assertCurrentLead(tx: Prisma.TransactionClient, projectId: string, userId: string): Promise<void> {
+  const caller = await tx.projectMember.findUnique({
+    where: { projectId_userId: { projectId, userId } },
+    select: { role: true },
+  });
+  if (caller?.role !== "LEAD") throw new ForbiddenError();
+}
+
 /** Adds an active workspace member. Project Lead only. The new person joins as a member, not a lead. */
 export async function addProjectMember(ctx: AuthContext, rawInput: unknown): Promise<{ added: boolean }> {
   const input = parseInput(addProjectMemberSchema, rawInput);
@@ -212,13 +228,14 @@ export async function addProjectMember(ctx: AuthContext, rawInput: unknown): Pro
   });
   if (!person) throw new ValidationError("Choose an active workspace member.", { userId: ["Unknown person."] });
 
-  const existing = await prisma.projectMember.findUnique({
-    where: { projectId_userId: { projectId: project.id, userId: person.userId } },
-    select: { userId: true },
-  });
-  if (existing) throw new ConflictError("This person is already on the project.");
-
   await prisma.$transaction(async (tx) => {
+    await lockProject(tx, project.id);
+    await assertCurrentLead(tx, project.id, ctx.userId);
+    const existing = await tx.projectMember.findUnique({
+      where: { projectId_userId: { projectId: project.id, userId: person.userId } },
+      select: { userId: true },
+    });
+    if (existing) throw new ConflictError("This person is already on the project.");
     await tx.projectMember.create({
       data: { projectId: project.id, userId: person.userId, role: "MEMBER", addedById: ctx.userId },
     });
@@ -248,16 +265,17 @@ export async function removeProjectMember(ctx: AuthContext, rawInput: unknown): 
   const project = await activeProject(ctx, input.projectId);
   assertProjectPermission(ctx, "project.manage", project.id);
 
-  const member = await prisma.projectMember.findUnique({
-    where: { projectId_userId: { projectId: project.id, userId: input.userId } },
-    select: { role: true, userId: true },
-  });
-  if (!member) throw new NotFoundError("That person is not on this project.");
-  if (member.role === "LEAD") {
-    throw new ValidationError("Transfer the lead role before removing this person.");
-  }
-
   await prisma.$transaction(async (tx) => {
+    await lockProject(tx, project.id);
+    await assertCurrentLead(tx, project.id, ctx.userId);
+    const member = await tx.projectMember.findUnique({
+      where: { projectId_userId: { projectId: project.id, userId: input.userId } },
+      select: { role: true, userId: true },
+    });
+    if (!member) throw new NotFoundError("That person is not on this project.");
+    if (member.role === "LEAD") {
+      throw new ValidationError("Transfer the lead role before removing this person.");
+    }
     await tx.projectMember.delete({
       where: { projectId_userId: { projectId: project.id, userId: member.userId } },
     });
@@ -280,23 +298,25 @@ export async function transferProjectLead(ctx: AuthContext, rawInput: unknown): 
   const project = await activeProject(ctx, input.projectId);
   assertProjectPermission(ctx, "project.manage", project.id);
 
-  const members = await prisma.projectMember.findMany({
-    where: { projectId: project.id },
-    select: { userId: true, role: true },
-  });
-  const current = members.find((member) => member.role === "LEAD");
-  const next = members.find((member) => member.userId === input.userId);
-  if (!current) throw new ValidationError("This project has no lead.");
-  if (!next) throw new ValidationError("Add the person to the project before making them lead.");
-  if (current.userId === next.userId) return { changed: false };
+  const changed = await prisma.$transaction(async (tx) => {
+    await lockProject(tx, project.id);
+    await assertCurrentLead(tx, project.id, ctx.userId);
+    const members = await tx.projectMember.findMany({
+      where: { projectId: project.id },
+      select: { userId: true, role: true },
+    });
+    const current = members.find((member) => member.role === "LEAD");
+    const next = members.find((member) => member.userId === input.userId);
+    if (!current) throw new ValidationError("This project has no lead.");
+    if (!next) throw new ValidationError("Add the person to the project before making them lead.");
+    if (current.userId === next.userId) return false;
 
-  const active = await prisma.user.findFirst({
-    where: { id: next.userId, status: "ACTIVE" },
-    select: { id: true },
-  });
-  if (!active) throw new ValidationError("The new lead must be an active person.");
+    const active = await tx.user.findFirst({
+      where: { id: next.userId, status: "ACTIVE" },
+      select: { id: true },
+    });
+    if (!active) throw new ValidationError("The new lead must be an active person.");
 
-  await prisma.$transaction(async (tx) => {
     await tx.projectMember.update({
       where: { projectId_userId: { projectId: project.id, userId: current.userId } },
       data: { role: "MEMBER" },
@@ -322,8 +342,9 @@ export async function transferProjectLead(ctx: AuthContext, rawInput: unknown): 
       role: "LEAD",
       activityId,
     });
+    return true;
   });
-  return { changed: true };
+  return { changed };
 }
 
 async function projectForAdmin(ctx: AuthContext, projectId: string) {
