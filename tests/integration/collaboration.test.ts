@@ -105,11 +105,27 @@ describe("issue collaboration", () => {
     const projectId = await aquaId();
     const epic = await createIssue(alex, { projectId, type: "EPIC", title: "Collaboration notes epic" });
 
-    const note = await addNote(alex, { issueId: epic.id, content: "Check the provider calendar before promising slots." });
-    await updateNote(alex, { noteId: note.id, content: "Check the provider calendar before promising a slot." });
-    await expect(updateNote(mika, { noteId: note.id, content: "Changed by someone else." })).rejects.toBeInstanceOf(ForbiddenError);
-    await expect(addNote(executive, { issueId: epic.id, content: "Executive note" })).rejects.toBeInstanceOf(ForbiddenError);
-    await expect(addNote(admin, { issueId: epic.id, content: "Admin note" })).rejects.toBeInstanceOf(NotFoundError);
+    const note = await addNote(alex, {
+      issueId: epic.id,
+      title: "Provider calendar",
+      category: "REQUIREMENT",
+      content: "Check the provider calendar before promising slots.",
+    });
+    await updateNote(alex, {
+      noteId: note.id,
+      title: "Provider calendar",
+      category: "REQUIREMENT",
+      content: "Check the provider calendar before promising a slot.",
+    });
+    await expect(
+      updateNote(mika, { noteId: note.id, title: "Changed", category: "PRODUCT", content: "Changed by someone else." }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(
+      addNote(executive, { issueId: epic.id, title: "Executive", category: "PRODUCT", content: "Executive note" }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(addNote(admin, { issueId: epic.id, title: "Admin", category: "PRODUCT", content: "Admin note" })).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
 
     const comment = await addComment(mika, { issueId: epic.id, body: "The empty state still needs a time estimate." });
     await updateComment(mika, { commentId: comment.id, body: "The empty state still needs a time estimate on mobile." });
@@ -117,6 +133,7 @@ describe("issue collaboration", () => {
 
     const listed = await listIssueCollaboration(executive, epic.id);
     expect(listed.notes.map((item) => item.content)).toContain("Check the provider calendar before promising a slot.");
+    expect(listed.notes[0]?.revisions).toHaveLength(2);
     expect(listed.comments.map((item) => item.body)).toContain("The empty state still needs a time estimate on mobile.");
     await expect(listIssueCollaboration(admin, epic.id)).rejects.toBeInstanceOf(NotFoundError);
 
@@ -178,7 +195,7 @@ describe("issue collaboration", () => {
 
     await expect(removeAttachment(mika, { attachmentId: saved.id })).rejects.toBeInstanceOf(ForbiddenError);
     await removeAttachment(alex, { attachmentId: saved.id });
-    expect(await storage.head(row.objectKey)).toBeNull();
+    expect(await storage.head(row.objectKey)).not.toBeNull();
     const removed = await testDb.issueAttachment.findUniqueOrThrow({ where: { id: saved.id } });
     expect(removed.deletedAt).not.toBeNull();
     await expect(openAttachment(alex, saved.id)).rejects.toBeInstanceOf(NotFoundError);
@@ -207,7 +224,12 @@ describe("issue collaboration", () => {
       parentId: task.id,
       title: "Collaboration archive sub-task",
     });
-    const note = await addNote(alex, { issueId: subtask.id, content: "Still needed after archive." });
+    const note = await addNote(alex, {
+      issueId: subtask.id,
+      title: "Still needed",
+      category: "TECHNICAL",
+      content: "Still needed after archive.",
+    });
     await archiveIssue(alex, { issueId: subtask.id });
 
     const listed = await listIssueCollaboration(alex, subtask.id);

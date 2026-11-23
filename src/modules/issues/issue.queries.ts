@@ -3,7 +3,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import type { IssuePriority, IssueStatus, IssueType } from "@/generated/prisma/enums";
 import { isOverdue } from "@/lib/calendar";
 import { issueKey } from "@/modules/issues/issue.keys";
-import { childTypeFor } from "@/modules/issues/issue.rules";
+import { childTypeFor, requiredParentType, wouldCreateCycle } from "@/modules/issues/issue.rules";
 import { progressOfIssue, progressOfProject, type Progress, type ProgressIssue } from "@/modules/issues/issue.progress";
 import { prisma } from "@/server/db";
 import { getEnv } from "@/server/env";
@@ -36,6 +36,7 @@ export interface IssueListItem {
   overdue: boolean;
   progress: Progress;
   allowedChildType: IssueType | null;
+  archivedAt: Date | null;
   children: IssueListItem[];
 }
 
@@ -77,8 +78,14 @@ export interface IssueDetail {
   progress: Progress;
   labels: IssueLabelView[];
   story: StoryFieldsView | null;
-  /** Governing User Story for Tasks and Sub-tasks (read-only context). */
-  governingStory: (StoryFieldsView & { issueId: string; key: string; title: string }) | null;
+  /** Governing User Story for Tasks and Sub-tasks, including that story's acceptance criteria. */
+  governingStory: (StoryFieldsView & {
+    issueId: string;
+    key: string;
+    title: string;
+    criteria: AcceptanceCriterionView[];
+  }) | null;
+  parentOptions: { id: string; key: string; title: string }[];
   acceptanceCriteria: AcceptanceCriterionView[];
   allowedChildType: IssueType | null;
   canMutate: boolean;
@@ -149,6 +156,7 @@ export async function listProjectIssueTree(
     overdue: isOverdue(row.dueDate, row.status, timeZone),
     progress: progressOfIssue(row.id, progressRows),
     allowedChildType: childTypeFor(row.type),
+    archivedAt: row.archivedAt,
     children: (byParent.get(row.id) ?? []).map(toItem),
   });
 
@@ -159,7 +167,7 @@ export async function listProjectIssueTree(
 async function findGoverningStory(
   issue: { id: string; type: IssueType; parentId: string | null },
   projectKey: string,
-): Promise<(StoryFieldsView & { issueId: string; key: string; title: string }) | null> {
+): Promise<IssueDetail["governingStory"]> {
   if (issue.type === "USER_STORY") return null;
   let currentId = issue.parentId;
   for (let depth = 0; depth < 4 && currentId; depth += 1) {
@@ -172,6 +180,11 @@ async function findGoverningStory(
         number: true,
         title: true,
         story: { select: { asA: true, iWant: true, soThat: true } },
+        criteria: {
+          where: { deletedAt: null },
+          orderBy: { position: "asc" },
+          select: { id: true, text: true, isMet: true, position: true },
+        },
       },
     });
     if (!node) return null;
@@ -183,6 +196,7 @@ async function findGoverningStory(
         asA: node.story.asA,
         iWant: node.story.iWant,
         soThat: node.story.soThat,
+        criteria: node.criteria,
       };
     }
     currentId = node.parentId;
@@ -239,6 +253,18 @@ export async function getVisibleIssueByNumber(
 
   const timeZone = getEnv().COMPANY_TIMEZONE;
   const governingStory = await findGoverningStory(issue, issue.project.key);
+  const parentType = requiredParentType(issue.type);
+  const parentRows = parentType
+    ? await prisma.issue.findMany({
+        where: { projectId: issue.project.id, type: parentType, archivedAt: null },
+        select: { id: true, number: true, title: true, parentId: true },
+        orderBy: { number: "asc" },
+      })
+    : [];
+  const parentOf = new Map(siblingsAndDescendants.map((row) => [row.id, row.parentId]));
+  const parentOptions = parentRows
+    .filter((row) => row.id !== issue.id && !wouldCreateCycle(issue.id, row.id, (id) => parentOf.get(id) ?? null))
+    .map((row) => ({ id: row.id, key: issueKey(issue.project.key, row.number), title: row.title }));
 
   return {
     id: issue.id,
@@ -273,6 +299,7 @@ export async function getVisibleIssueByNumber(
     labels: issue.labels.map((row) => row.label),
     story: issue.story,
     governingStory,
+    parentOptions,
     acceptanceCriteria: issue.criteria,
     allowedChildType: childTypeFor(issue.type),
     canMutate: hasProjectPermission(ctx, "project.participate", issue.project.id),

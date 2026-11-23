@@ -106,6 +106,7 @@ export async function patchIssueAction(_previous: IssueActionState, formData: Fo
     if (formData.has("assigneeId")) input.assigneeId = optional(formData.get("assigneeId")) ?? null;
     if (formData.has("dueDate")) input.dueDate = optional(formData.get("dueDate")) ?? null;
     if (formData.has("plannedStartDate")) input.plannedStartDate = optional(formData.get("plannedStartDate")) ?? null;
+    if (formData.has("parentId")) input.parentId = optional(formData.get("parentId"));
     const result = await updateIssue(ctx, input);
     pathsFor(optional(formData.get("projectKey")) ?? "", optional(formData.get("issueNumber")));
     return actionSuccess({ changed: result.changed, key: result.key });

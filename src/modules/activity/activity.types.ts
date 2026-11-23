@@ -7,6 +7,10 @@ export const ACTIVITY_ACTIONS = [
   "project.updated",
   "project.health_changed",
   "project.member_added",
+  "project.member_removed",
+  "project.lead_changed",
+  "project.archived",
+  "project.restored",
   "issue.created",
   "issue.updated",
   "issue.completed",
@@ -30,6 +34,7 @@ export const ACTIVITY_ACTIONS = [
   "issue.comment_removed",
   "issue.attachment_added",
   "issue.attachment_removed",
+  "issue.attachment_purged",
 ] as const;
 
 export type ActivityAction = (typeof ACTIVITY_ACTIONS)[number];

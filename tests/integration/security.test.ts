@@ -84,12 +84,16 @@ describe("security boundaries", () => {
     await expect(openAttachment(alex, saved.id)).rejects.toBeInstanceOf(NotFoundError);
 
     const aqua = await createIssue(alex, { projectId: await projectId("AQUA"), type: "EPIC", title: "Same project authorship" });
-    const note = await addNote(alex, { issueId: aqua.id, content: "Alex planning note" });
+    const note = await addNote(alex, { issueId: aqua.id, title: "Planning", category: "PRODUCT", content: "Alex planning note" });
     const comment = await addComment(alex, { issueId: aqua.id, body: "Alex comment" });
-    await expect(updateNote(emma, { noteId: note.id, content: "Emma rewrite" })).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(updateNote(emma, { noteId: note.id, title: "Planning", category: "PRODUCT", content: "Emma rewrite" })).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
     await expect(updateComment(emma, { commentId: comment.id, body: "Emma rewrite" })).rejects.toBeInstanceOf(ForbiddenError);
-    const hiddenNote = await addNote(alex, { issueId: sv.id, content: "Private SV note" });
-    await expect(updateNote(emma, { noteId: hiddenNote.id, content: "Cross project rewrite" })).rejects.toBeInstanceOf(NotFoundError);
+    const hiddenNote = await addNote(alex, { issueId: sv.id, title: "Private", category: "PRODUCT", content: "Private SV note" });
+    await expect(
+      updateNote(emma, { noteId: hiddenNote.id, title: "Private", category: "PRODUCT", content: "Cross project rewrite" }),
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 
   test("admin sees no project content, search hits, or export rows", async () => {
@@ -118,7 +122,9 @@ describe("security boundaries", () => {
     expect(portfolio.some((project) => project.key === "AQUA")).toBe(true);
     const issue = await createIssue(alex, { projectId: await projectId("SV"), type: "EPIC", title: "Executive write fence" });
     await expect(updateIssue(alson, { issueId: issue.id, title: "Executive edit" })).rejects.toBeInstanceOf(ForbiddenError);
-    await expect(addNote(alson, { issueId: issue.id, content: "Executive note" })).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(addNote(alson, { issueId: issue.id, title: "Executive", category: "PRODUCT", content: "Executive note" })).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
     expect(() => assertWorkspacePermission(alson, "admin.access")).toThrow(ForbiddenError);
     await expect(loadExecutivePortfolio(sarah)).rejects.toBeInstanceOf(ForbiddenError);
     expect(() => assertWorkspacePermission(sarah, "executive.view")).toThrow(ForbiddenError);

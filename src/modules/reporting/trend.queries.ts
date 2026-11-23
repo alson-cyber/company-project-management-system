@@ -1,6 +1,6 @@
 import "server-only";
 import { Prisma } from "@/generated/prisma/client";
-import { addCalendarDays, parseCalendarDate, todayInTimeZone } from "@/lib/calendar";
+import { addCalendarDays, companyDayRange, todayInTimeZone } from "@/lib/calendar";
 import { issueKey } from "@/modules/issues/issue.keys";
 import { visibleProjectsWhere } from "@/modules/projects/project.queries";
 import type { ReportFilters } from "@/modules/reporting/reports.model";
@@ -20,18 +20,17 @@ export interface TrendPoint {
 /** Completions per company calendar day. Credit is the actor on issue.completed, not the current assignee. */
 export async function completionTrend(ctx: AuthContext, projectIds: string[], filters: ReportFilters): Promise<TrendPoint[]> {
   if (projectIds.length === 0) return [];
-  const from = parseCalendarDate(filters.from);
-  const to = parseCalendarDate(addCalendarDays(filters.to, 1));
+  const range = companyDayRange(filters.from, filters.to, companyTimeZone());
   const rows = await prisma.$queryRaw<{ day: string; count: number }[]>(Prisma.sql`
-    SELECT to_char(activity_events.occurred_at AT TIME ZONE ${companyTimeZone()}, 'YYYY-MM-DD') AS day,
+    SELECT to_char((activity_events.occurred_at AT TIME ZONE 'UTC') AT TIME ZONE ${companyTimeZone()}, 'YYYY-MM-DD') AS day,
            count(*)::int AS count
     FROM activity_events
     INNER JOIN issues ON issues.id = activity_events.issue_id
     WHERE activity_events.workspace_id = ${ctx.workspace.id}
       AND activity_events.action = 'issue.completed'
       AND activity_events.project_id IN (${Prisma.join(projectIds.map((id) => Prisma.sql`${id}`))})
-      AND activity_events.occurred_at >= ${from}
-      AND activity_events.occurred_at < ${to}
+      AND activity_events.occurred_at >= ${range.start}
+      AND activity_events.occurred_at < ${range.end}
       ${filters.actorId ? Prisma.sql`AND activity_events.actor_user_id = ${filters.actorId}` : Prisma.empty}
       ${filters.issueType ? Prisma.sql`AND issues.type::text = ${filters.issueType}` : Prisma.empty}
     GROUP BY 1
@@ -61,7 +60,10 @@ export async function listVisibleCompletionEvidence(ctx: AuthContext, filters: R
       workspaceId: ctx.workspace.id,
       action: "issue.completed",
       project: { ...visibleProjectsWhere(ctx), ...(filters.projectKey ? { key: filters.projectKey } : {}) },
-      occurredAt: { gte: parseCalendarDate(filters.from), lt: parseCalendarDate(addCalendarDays(filters.to, 1)) },
+      occurredAt: {
+        gte: companyDayRange(filters.from, filters.to, companyTimeZone()).start,
+        lt: companyDayRange(filters.from, filters.to, companyTimeZone()).end,
+      },
       ...(filters.actorId ? { actorUserId: filters.actorId } : {}),
       ...(filters.issueType ? { issue: { type: filters.issueType } } : {}),
     },

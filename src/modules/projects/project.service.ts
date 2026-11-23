@@ -4,7 +4,15 @@ import type { ProjectHealth } from "@/generated/prisma/enums";
 import { recordActivity } from "@/modules/activity/activity.service";
 import { notifyMembership } from "@/modules/attention/notify";
 import { PROJECT_COLORS } from "@/modules/projects/project.constants";
-import { createProjectSchema, setProjectHealthSchema, updateProjectSchema } from "@/modules/projects/project.schema";
+import {
+  addProjectMemberSchema,
+  createProjectSchema,
+  projectIdSchema,
+  removeProjectMemberSchema,
+  setProjectHealthSchema,
+  transferProjectLeadSchema,
+  updateProjectSchema,
+} from "@/modules/projects/project.schema";
 import { calendarDayUtc } from "@/lib/calendar";
 import { prisma } from "@/server/db";
 import { ConflictError, NotFoundError, ValidationError, parseInput } from "@/server/errors";
@@ -180,5 +188,191 @@ export async function updateProject(ctx: AuthContext, rawInput: unknown): Promis
     });
   });
 
+  return { changed: true, key: project.key };
+}
+
+async function activeProject(ctx: AuthContext, projectId: string) {
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, workspaceId: ctx.workspace.id, archivedAt: null },
+    select: { id: true, key: true },
+  });
+  if (!project) throw new NotFoundError("Project not found.");
+  return project;
+}
+
+/** Adds an active workspace member. Project Lead only. The new person joins as a member, not a lead. */
+export async function addProjectMember(ctx: AuthContext, rawInput: unknown): Promise<{ added: boolean }> {
+  const input = parseInput(addProjectMemberSchema, rawInput);
+  const project = await activeProject(ctx, input.projectId);
+  assertProjectPermission(ctx, "project.manage", project.id);
+
+  const person = await prisma.workspaceMember.findFirst({
+    where: { workspaceId: ctx.workspace.id, userId: input.userId, user: { status: "ACTIVE" } },
+    select: { userId: true },
+  });
+  if (!person) throw new ValidationError("Choose an active workspace member.", { userId: ["Unknown person."] });
+
+  const existing = await prisma.projectMember.findUnique({
+    where: { projectId_userId: { projectId: project.id, userId: person.userId } },
+    select: { userId: true },
+  });
+  if (existing) throw new ConflictError("This person is already on the project.");
+
+  await prisma.$transaction(async (tx) => {
+    await tx.projectMember.create({
+      data: { projectId: project.id, userId: person.userId, role: "MEMBER", addedById: ctx.userId },
+    });
+    const activityId = await recordActivity(tx, {
+      workspaceId: ctx.workspace.id,
+      actor: { type: "USER", userId: ctx.userId },
+      action: "project.member_added",
+      entityType: "project_member",
+      entityId: `${project.id}:${person.userId}`,
+      projectId: project.id,
+      after: { userId: person.userId, role: "MEMBER" },
+    });
+    await notifyMembership(tx, {
+      actorId: ctx.userId,
+      projectId: project.id,
+      userId: person.userId,
+      role: "MEMBER",
+      activityId,
+    });
+  });
+  return { added: true };
+}
+
+/** Removes a member. The lead stays until the lead role is transferred. */
+export async function removeProjectMember(ctx: AuthContext, rawInput: unknown): Promise<{ removed: boolean }> {
+  const input = parseInput(removeProjectMemberSchema, rawInput);
+  const project = await activeProject(ctx, input.projectId);
+  assertProjectPermission(ctx, "project.manage", project.id);
+
+  const member = await prisma.projectMember.findUnique({
+    where: { projectId_userId: { projectId: project.id, userId: input.userId } },
+    select: { role: true, userId: true },
+  });
+  if (!member) throw new NotFoundError("That person is not on this project.");
+  if (member.role === "LEAD") {
+    throw new ValidationError("Transfer the lead role before removing this person.");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.projectMember.delete({
+      where: { projectId_userId: { projectId: project.id, userId: member.userId } },
+    });
+    await recordActivity(tx, {
+      workspaceId: ctx.workspace.id,
+      actor: { type: "USER", userId: ctx.userId },
+      action: "project.member_removed",
+      entityType: "project_member",
+      entityId: `${project.id}:${member.userId}`,
+      projectId: project.id,
+      before: { userId: member.userId, role: member.role },
+    });
+  });
+  return { removed: true };
+}
+
+/** Demotes the current lead and promotes an existing member in one transaction. */
+export async function transferProjectLead(ctx: AuthContext, rawInput: unknown): Promise<{ changed: boolean }> {
+  const input = parseInput(transferProjectLeadSchema, rawInput);
+  const project = await activeProject(ctx, input.projectId);
+  assertProjectPermission(ctx, "project.manage", project.id);
+
+  const members = await prisma.projectMember.findMany({
+    where: { projectId: project.id },
+    select: { userId: true, role: true },
+  });
+  const current = members.find((member) => member.role === "LEAD");
+  const next = members.find((member) => member.userId === input.userId);
+  if (!current) throw new ValidationError("This project has no lead.");
+  if (!next) throw new ValidationError("Add the person to the project before making them lead.");
+  if (current.userId === next.userId) return { changed: false };
+
+  const active = await prisma.user.findFirst({
+    where: { id: next.userId, status: "ACTIVE" },
+    select: { id: true },
+  });
+  if (!active) throw new ValidationError("The new lead must be an active person.");
+
+  await prisma.$transaction(async (tx) => {
+    await tx.projectMember.update({
+      where: { projectId_userId: { projectId: project.id, userId: current.userId } },
+      data: { role: "MEMBER" },
+    });
+    await tx.projectMember.update({
+      where: { projectId_userId: { projectId: project.id, userId: next.userId } },
+      data: { role: "LEAD" },
+    });
+    const activityId = await recordActivity(tx, {
+      workspaceId: ctx.workspace.id,
+      actor: { type: "USER", userId: ctx.userId },
+      action: "project.lead_changed",
+      entityType: "project_member",
+      entityId: `${project.id}:${next.userId}`,
+      projectId: project.id,
+      before: { userId: current.userId, role: "LEAD" },
+      after: { userId: next.userId, role: "LEAD" },
+    });
+    await notifyMembership(tx, {
+      actorId: ctx.userId,
+      projectId: project.id,
+      userId: next.userId,
+      role: "LEAD",
+      activityId,
+    });
+  });
+  return { changed: true };
+}
+
+async function projectForAdmin(ctx: AuthContext, projectId: string) {
+  assertWorkspacePermission(ctx, "admin.access");
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, workspaceId: ctx.workspace.id },
+    select: { id: true, key: true, archivedAt: true },
+  });
+  if (!project) throw new NotFoundError("Project not found.");
+  return project;
+}
+
+/** Hides a project from navigation, reports and day-to-day work. Admin only. Issues stay intact. */
+export async function archiveProject(ctx: AuthContext, rawInput: unknown): Promise<{ changed: boolean; key: string }> {
+  const input = parseInput(projectIdSchema, rawInput);
+  const project = await projectForAdmin(ctx, input.projectId);
+  if (project.archivedAt) return { changed: false, key: project.key };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.project.update({ where: { id: project.id }, data: { archivedAt: new Date() } });
+    await recordActivity(tx, {
+      workspaceId: ctx.workspace.id,
+      actor: { type: "USER", userId: ctx.userId },
+      action: "project.archived",
+      entityType: "project",
+      entityId: project.id,
+      projectId: project.id,
+      after: { key: project.key },
+    });
+  });
+  return { changed: true, key: project.key };
+}
+
+export async function restoreProject(ctx: AuthContext, rawInput: unknown): Promise<{ changed: boolean; key: string }> {
+  const input = parseInput(projectIdSchema, rawInput);
+  const project = await projectForAdmin(ctx, input.projectId);
+  if (!project.archivedAt) return { changed: false, key: project.key };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.project.update({ where: { id: project.id }, data: { archivedAt: null } });
+    await recordActivity(tx, {
+      workspaceId: ctx.workspace.id,
+      actor: { type: "USER", userId: ctx.userId },
+      action: "project.restored",
+      entityType: "project",
+      entityId: project.id,
+      projectId: project.id,
+      after: { key: project.key },
+    });
+  });
   return { changed: true, key: project.key };
 }

@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ProjectMembership, RemoveMemberButton } from "@/components/projects/project-membership";
 import { ProjectWorkspaceHeader } from "@/components/projects/project-workspace-header";
 import { Avatar } from "@/components/ui/avatar";
 import { ProjectRoleBadge } from "@/components/ui/badge";
 import { formatDateTime } from "@/components/ui/format";
 import { describeActivity } from "@/modules/activity/activity.format";
-import { listLatestContributions } from "@/modules/activity/activity.queries";
-import { getVisibleProjectByKey } from "@/modules/projects/project.queries";
+import { listLatestContributions, listProjectCompletionCredits } from "@/modules/activity/activity.queries";
+import { getVisibleProjectByKey, listMembershipCandidates } from "@/modules/projects/project.queries";
+import { hasProjectPermission } from "@/server/access/policy";
 import { memberFacts } from "@/modules/projects/workspace.model";
 import { listProjectWorkspaceIssues } from "@/modules/projects/workspace.queries";
 import { requireAuthContext } from "@/server/access/session";
@@ -24,14 +26,25 @@ export default async function TeamPage({ params }: { params: Promise<{ projectKe
   const project = await getVisibleProjectByKey(ctx, projectKey);
   if (!project) notFound();
 
-  const [issues, latest] = await Promise.all([
+  const canManage = hasProjectPermission(ctx, "project.manage", project.id);
+  const [issues, latest, completions, candidates] = await Promise.all([
     listProjectWorkspaceIssues(ctx, project.id),
     listLatestContributions(ctx, project.id),
+    listProjectCompletionCredits(ctx, project.id),
+    canManage ? listMembershipCandidates(ctx, project.id) : Promise.resolve([]),
   ]);
 
   return (
     <>
       <ProjectWorkspaceHeader project={project} current="team" />
+      {canManage ? (
+        <ProjectMembership
+          projectId={project.id}
+          projectKey={project.key}
+          candidates={candidates}
+          members={project.members.map((member) => ({ userId: member.userId, name: member.name, role: member.role }))}
+        />
+      ) : null}
       <p className="mb-3 text-xs text-muted">
         {project.members.length === 1 ? "1 person is on this project." : `${project.members.length} people are on this project.`}{" "}
         Counts are assigned work and recorded completions, not a performance score.
@@ -50,7 +63,7 @@ export default async function TeamPage({ params }: { params: Promise<{ projectKe
           </thead>
           <tbody>
             {project.members.map((member) => {
-              const facts = memberFacts(member.userId, issues);
+              const facts = memberFacts(member.userId, issues, completions);
               const contribution = latest.get(member.userId);
               return (
                 <tr key={member.userId} className="border-b border-line/70">
@@ -71,6 +84,9 @@ export default async function TeamPage({ params }: { params: Promise<{ projectKe
                   <td className="py-3 pr-3 text-right tabular-nums">{facts.overdueAssigned.length}</td>
                   <td className="py-3 pr-3 text-right tabular-nums">{facts.completed.length}</td>
                   <td className="py-3 text-[13px] text-muted">
+                    {canManage && member.role !== "LEAD" ? (
+                      <RemoveMemberButton projectId={project.id} projectKey={project.key} userId={member.userId} name={member.name} />
+                    ) : null}{" "}
                     {contribution ? (
                       <>
                         {describeActivity({

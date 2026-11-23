@@ -33,6 +33,51 @@ export function parseCalendarDate(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
 }
 
+const CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** A real calendar day, or null when the text is the wrong shape or not a date (2026-99-99). */
+export function strictCalendarDay(value: string): string | null {
+  if (!CALENDAR_DATE.test(value)) return null;
+  const parsed = parseCalendarDate(value);
+  if (Number.isNaN(parsed.getTime()) || calendarDayUtc(parsed) !== value) return null;
+  return value;
+}
+
+/** Milliseconds to add to a UTC instant to reach the same clock reading in the zone. */
+function zoneOffsetMs(timeZone: string, instant: Date): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(instant);
+  const pick = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value);
+  const hour = pick("hour") % 24;
+  const asUtc = Date.UTC(pick("year"), pick("month") - 1, pick("day"), hour, pick("minute"), pick("second"));
+  return asUtc - instant.getTime();
+}
+
+/** UTC instant when the company calendar day begins (local midnight). */
+export function companyDayStart(day: string, timeZone: string): Date {
+  const utcMidnight = parseCalendarDate(day);
+  const start = new Date(utcMidnight.getTime() - zoneOffsetMs(timeZone, utcMidnight));
+  const adjusted = zoneOffsetMs(timeZone, start);
+  if (adjusted === zoneOffsetMs(timeZone, utcMidnight)) return start;
+  return new Date(utcMidnight.getTime() - adjusted);
+}
+
+/** Half-open range [start, end) covering inclusive company calendar days. */
+export function companyDayRange(from: string, toInclusive: string, timeZone: string): { start: Date; end: Date } {
+  return {
+    start: companyDayStart(from, timeZone),
+    end: companyDayStart(addCalendarDays(toInclusive, 1), timeZone),
+  };
+}
+
 /** Adds calendar days to a YYYY-MM-DD string. The result stays a calendar date. */
 export function addCalendarDays(day: string, days: number): string {
   const [year, month, date] = day.split("-").map(Number);
@@ -76,5 +121,5 @@ export function isDueSoon(
 
 /** Start of the completed-recently window: the first instant of (today - (days-1)). */
 export function recentWindowStart(timeZone: string, days: number, at: Date = new Date()): Date {
-  return parseCalendarDate(addCalendarDays(todayInTimeZone(timeZone, at), -(days - 1)));
+  return companyDayStart(addCalendarDays(todayInTimeZone(timeZone, at), -(days - 1)), timeZone);
 }

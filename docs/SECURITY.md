@@ -58,8 +58,8 @@ Search queries are truncated to 80 characters. Result lists are fixed small page
 - Filenames are reduced to a basename, control characters are removed, and the result is capped at 180 characters.
 - `text/html`, SVG, and JavaScript types are stored as `application/octet-stream`.
 - Download responses send `X-Content-Type-Options: nosniff`. `Content-Disposition: inline` is used only for JPEG, PNG, GIF, and WebP. Everything else is an attachment download.
-- Opening or deleting an attachment checks project permission. A soft-deleted row is not returned.
-- Object bytes are removed before the metadata is soft-deleted. If object deletion fails, the row stays so the same request can be retried. Users cannot choose the storage key.
+- Opening or removing an attachment checks project permission. A soft-deleted row is not returned, and the stored bytes stay until an Admin purges them.
+- Removing a file records the removal and keeps the object. Purging is a separate Admin action that deletes the bytes and writes `issue.attachment_purged`. Users cannot choose the storage key. Executable types are rejected, and each new upload stores a SHA-256 checksum.
 - Local storage resolves keys under the storage root and rejects `..`.
 - There is no antivirus scan. A production deployment should scan objects in the storage pipeline before they are served.
 

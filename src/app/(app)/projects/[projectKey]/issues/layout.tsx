@@ -19,7 +19,7 @@ export default async function ProjectIssuesLayout({
   if (!project) notFound();
 
   const [{ tree, progress }, members] = await Promise.all([
-    listProjectIssueTree(ctx, project.id),
+    listProjectIssueTree(ctx, project.id, { includeArchived: true }),
     listAssignableMembers(ctx, project.id),
   ]);
   const canMutate = hasProjectPermission(ctx, "project.participate", project.id);

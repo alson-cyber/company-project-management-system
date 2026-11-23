@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { parseReportFilters } from "@/modules/reporting/reports.model";
+import { filtersForReport, parseReportFilters, resolveReportProject } from "@/modules/reporting/reports.model";
 
 describe("report filters", () => {
   test("clamps a hostile custom range and drops malformed identifiers", () => {
@@ -21,6 +21,15 @@ describe("report filters", () => {
     expect(filters.assigneeId).toBeNull();
     expect(filters.actorId).toBeNull();
     expect(filters.status).toBeNull();
+  });
+
+  test("drops filters a report does not use, and an unknown project key is not every project", () => {
+    const parsed = parseReportFilters({ project: "ZZ", assignee: "11111111-1111-4111-8111-111111111111", status: "DONE" }, "2026-11-23");
+    const progress = filtersForReport("progress", parsed);
+    expect(progress.assigneeId).toBeNull();
+    expect(progress.status).toBeNull();
+    expect(resolveReportProject([{ key: "AQUA" }], "ZZ")).toBeNull();
+    expect(resolveReportProject([{ key: "AQUA" }], null)).toBeUndefined();
   });
 
   test("rejects a calendar date that does not exist", () => {

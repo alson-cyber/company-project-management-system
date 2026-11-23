@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { isInlineImage, sanitizeFilename, storedContentType } from "@/modules/collaboration/files";
+import { detectContentType, isDangerousAttachment, isInlineImage, sanitizeFilename, sha256Hex, storedContentType } from "@/modules/collaboration/files";
 
 describe("attachment filenames and types", () => {
   test("drops paths and control characters", () => {
@@ -19,5 +19,13 @@ describe("attachment filenames and types", () => {
     expect(isInlineImage("image/png")).toBe(true);
     expect(isInlineImage("image/svg+xml")).toBe(false);
     expect(isInlineImage("application/pdf")).toBe(false);
+  });
+
+  test("rejects executable names and executable bytes, and hashes the content", async () => {
+    expect(isDangerousAttachment("setup.exe", "application/octet-stream")).toBe(true);
+    expect(isDangerousAttachment("notes.txt", "application/x-msdownload")).toBe(true);
+    expect(detectContentType(Uint8Array.from([0x4d, 0x5a, 0x90, 0x00]))).toBe("application/x-msdownload");
+    expect(detectContentType(Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))).toBe("image/png");
+    expect(await sha256Hex(Uint8Array.from([1, 2, 3]))).toHaveLength(64);
   });
 });

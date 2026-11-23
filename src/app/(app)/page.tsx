@@ -76,7 +76,7 @@ export default async function DashboardPage() {
           href="/my-work?view=soon"
           label="Due soon"
           value={summary.dueSoon}
-          hint="Next 14 days"
+          hint="Today through the next 7 days"
         />
         <StatTile
           icon="bell"

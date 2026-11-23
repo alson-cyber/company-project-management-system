@@ -6,8 +6,8 @@ import type { AuthContext } from "@/server/access/types";
 import { ACTIVITY_ACTIONS, type ActivityAction } from "@/modules/activity/activity.types";
 import { issueKey } from "@/modules/issues/issue.keys";
 import { visibleProjectsWhere } from "@/modules/projects/project.queries";
-import { addCalendarDays } from "@/modules/projects/workspace.model";
-import { parseCalendarDate } from "@/lib/calendar";
+import { addCalendarDays, companyDayStart } from "@/lib/calendar";
+import { getEnv } from "@/server/env";
 import type { IssueType } from "@/generated/prisma/enums";
 import type { ActivityEventView } from "@/modules/activity/activity.format";
 
@@ -64,10 +64,16 @@ export interface ProjectActivityFilter {
   to?: string;
 }
 
-function activityWhere(ctx: AuthContext, projectId: string, filter: ProjectActivityFilter): Prisma.ActivityEventWhereInput {
+function companyOccurredAt(from?: string, to?: string): Prisma.DateTimeFilter {
+  const zone = getEnv().COMPANY_TIMEZONE;
   const occurredAt: Prisma.DateTimeFilter = {};
-  if (filter.from) occurredAt.gte = parseCalendarDate(filter.from);
-  if (filter.to) occurredAt.lt = parseCalendarDate(addCalendarDays(filter.to, 1));
+  if (from) occurredAt.gte = companyDayStart(from, zone);
+  if (to) occurredAt.lt = companyDayStart(addCalendarDays(to, 1), zone);
+  return occurredAt;
+}
+
+function activityWhere(ctx: AuthContext, projectId: string, filter: ProjectActivityFilter): Prisma.ActivityEventWhereInput {
+  const occurredAt = companyOccurredAt(filter.from, filter.to);
   return {
     workspaceId: ctx.workspace.id,
     projectId,
@@ -185,6 +191,20 @@ export async function listLatestContributions(
   );
 }
 
+export async function listProjectCompletionCredits(
+  ctx: AuthContext,
+  projectId: string,
+): Promise<Array<{ actorUserId: string | null; issueId: string }>> {
+  assertProjectPermission(ctx, "project.view", projectId);
+  return prisma.activityEvent.findMany({
+    where: { workspaceId: ctx.workspace.id, projectId, action: "issue.completed", issueId: { not: null } },
+    orderBy: { occurredAt: "desc" },
+    select: { actorUserId: true, issueId: true },
+  }).then((rows) =>
+    rows.flatMap((row) => (row.issueId ? [{ actorUserId: row.actorUserId, issueId: row.issueId }] : [])),
+  );
+}
+
 export function isActivityAction(value: string): value is ActivityAction {
   return (ACTIVITY_ACTIONS as readonly string[]).includes(value);
 }
@@ -252,10 +272,7 @@ export async function listScopedActivity(ctx: AuthContext, query: ScopedActivity
       ...(query.action ? { action: query.action } : {}),
       ...(query.from || query.to
         ? {
-            occurredAt: {
-              ...(query.from ? { gte: parseCalendarDate(query.from) } : {}),
-              ...(query.to ? { lt: parseCalendarDate(addCalendarDays(query.to, 1)) } : {}),
-            },
+            occurredAt: companyOccurredAt(query.from, query.to),
           }
         : {}),
       ...(query.issueType || query.issueNumber

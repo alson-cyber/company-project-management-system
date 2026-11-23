@@ -74,6 +74,40 @@ export const REPORTS: ReportDefinition[] = [
   },
 ];
 
+/** Filters each report actually applies. Hidden controls are ignored so a leftover query cannot change the numbers. */
+export const REPORT_FILTERS: Record<
+  ReportId,
+  { assignee: boolean; status: boolean; priority: boolean; type: boolean; actor: boolean; action: boolean }
+> = {
+  progress: { assignee: false, status: false, priority: false, type: false, actor: false, action: false },
+  status: { assignee: true, status: false, priority: true, type: true, actor: false, action: false },
+  overdue: { assignee: true, status: true, priority: true, type: true, actor: false, action: false },
+  priority: { assignee: true, status: true, priority: false, type: true, actor: false, action: false },
+  assignees: { assignee: true, status: true, priority: true, type: true, actor: false, action: false },
+  completions: { assignee: false, status: false, priority: false, type: true, actor: true, action: false },
+  activity: { assignee: false, status: false, priority: false, type: true, actor: true, action: true },
+  types: { assignee: true, status: true, priority: true, type: false, actor: false, action: false },
+};
+
+/** undefined means every accessible project. null means the key is not one of them. */
+export function resolveReportProject<T extends { key: string }>(projects: readonly T[], projectKey: string | null): T | null | undefined {
+  if (!projectKey) return undefined;
+  return projects.find((project) => project.key === projectKey) ?? null;
+}
+
+export function filtersForReport(report: ReportId, filters: ReportFilters): ReportFilters {
+  const allowed = REPORT_FILTERS[report];
+  return {
+    ...filters,
+    assigneeId: allowed.assignee ? filters.assigneeId : null,
+    status: allowed.status ? filters.status : null,
+    priority: allowed.priority ? filters.priority : null,
+    issueType: allowed.type ? filters.issueType : null,
+    actorId: allowed.actor ? filters.actorId : null,
+    action: allowed.action ? filters.action : null,
+  };
+}
+
 export function isReportId(value: string): value is ReportId {
   return (REPORT_IDS as readonly string[]).includes(value);
 }

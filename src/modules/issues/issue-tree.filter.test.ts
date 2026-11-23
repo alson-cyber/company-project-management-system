@@ -13,6 +13,7 @@ function node(partial: Partial<IssueListItem> & Pick<IssueListItem, "id" | "key"
     overdue: false,
     progress: { done: 0, total: 0, percent: 0 },
     allowedChildType: null,
+    archivedAt: null,
     children: [],
     ...partial,
   };

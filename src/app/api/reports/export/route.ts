@@ -1,6 +1,6 @@
 import { activityActionLabel, activityChangeDetail, describeActivity } from "@/modules/activity/activity.format";
 import { listScopedActivity } from "@/modules/activity/activity.queries";
-import { overdueRows } from "@/modules/reporting/report.derive";
+import { applyIssueFilters, overdueRows } from "@/modules/reporting/report.derive";
 import { loadVisibleIssueFacts, loadVisiblePortfolio } from "@/modules/reporting/portfolio.queries";
 import { csvFilename, toCsv } from "@/modules/reporting/csv";
 import { parseReportFilters } from "@/modules/reporting/reports.model";
@@ -63,12 +63,7 @@ async function renderExport(
         ]),
       );
     }
-    const projectIds = new Set(projects.map((project) => project.id));
-    const rows = overdueRows(
-      issues.filter((issue) => projectIds.has(issue.projectId)),
-      portfolio,
-      getEnv().COMPANY_TIMEZONE,
-    );
+    const rows = overdueRows(applyIssueFilters(issues, portfolio, filters), portfolio, getEnv().COMPANY_TIMEZONE);
     return toCsv(
       ["issue", "title", "project", "assignee", "priority", "status", "due", "overdueDays"],
       rows.map((row) => [row.key, row.title, row.projectKey, row.assigneeName, row.priority, row.status, row.dueDate, row.overdueDays]),

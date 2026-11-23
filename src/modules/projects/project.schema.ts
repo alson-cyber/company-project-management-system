@@ -65,3 +65,22 @@ export const updateProjectSchema = z.object({
 });
 
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
+
+export const addProjectMemberSchema = z.object({
+  projectId: z.uuid("Unknown project."),
+  userId: z.uuid("Choose a person."),
+});
+
+export const removeProjectMemberSchema = z.object({
+  projectId: z.uuid("Unknown project."),
+  userId: z.uuid("Unknown person."),
+});
+
+export const transferProjectLeadSchema = z.object({
+  projectId: z.uuid("Unknown project."),
+  userId: z.uuid("Choose the new lead."),
+});
+
+export const projectIdSchema = z.object({
+  projectId: z.uuid("Unknown project."),
+});

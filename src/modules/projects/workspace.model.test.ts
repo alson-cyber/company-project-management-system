@@ -161,8 +161,11 @@ describe("planned dates", () => {
 
 describe("member facts", () => {
   test("keeps completion with the person who completed the work after reassignment", () => {
-    expect(memberFacts("mika", tree).completed.map((item) => item.key)).toEqual(["AQUA-3"]);
-    expect(memberFacts("alex", tree).completed).toEqual([]);
+    const credits = [{ actorUserId: "mika", issueId: "done" }];
+    expect(memberFacts("mika", tree, credits).completed.map((item) => item.key)).toEqual(["AQUA-3"]);
+    expect(memberFacts("alex", tree, credits).completed).toEqual([]);
+    const reopened = tree.map((item) => (item.id === "done" ? { ...item, status: "IN_PROGRESS" as const, completedById: null } : item));
+    expect(memberFacts("mika", reopened, credits).completed.map((item) => item.key)).toEqual(["AQUA-3"]);
     expect(memberFacts("alex", tree).openAssigned.map((item) => item.key).sort()).toEqual(["AQUA-6", "AQUA-8"]);
     expect(memberFacts("alex", tree).overdueAssigned.map((item) => item.key)).toEqual(["AQUA-6"]);
   });
